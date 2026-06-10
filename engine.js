@@ -233,6 +233,9 @@ function performAttack(state, attacker, params, meta) {
     baseDmg = special.dmg;
 
     if (pattern === 'telegrab') {
+      if (params.focus !== undefined && params.focus !== null) fail('Telegrab takes no focus');
+      if (params.lungeTo !== undefined && params.lungeTo !== null) fail('this attack has no Lunge rider');
+      if (params.blinkTo !== undefined && params.blinkTo !== null) fail('this attack has no Blink rider');
       return performTelegrab(state, attacker, special, params, meta, declPos);
     }
     if (pattern === 'single') {
