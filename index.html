@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Grid Monsters</title>
+<link rel="stylesheet" href="style.css">
+<script defer src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script defer src="ui.js"></script>
+<script defer src="net.js"></script>
+</head>
+<body>
+<div id="app"><div class="boot">Loading…</div></div>
+<div id="toasts"></div>
+<script>
+/* GM-BOOT: data.js and engine.js are CommonJS-style files that both declare a
+   top-level `const GM_DATA`, so they cannot be loaded as two plain classic
+   scripts (global lexical redeclaration). This loader evaluates them with a
+   tiny CommonJS shim instead:
+   - http(s): fetch both sources and run them via new Function (module/require).
+   - file://: fetch is blocked, so a hidden iframe of this same page
+     (?gm-dataframe=1) classic-loads data.js in its own global scope and posts
+     GM_DATA back; engine.js is then injected here as a classic script with
+     window.module/window.require shims (data.js never runs in this page, so
+     engine's own `const GM_DATA` declaration is fresh). */
+(function () {
+  var isFrame = location.search.indexOf('gm-dataframe') !== -1 && window.parent !== window;
+  if (isFrame) {
+    document.documentElement.style.visibility = 'hidden';
+    window.module = { exports: {} };
+    var ds = document.createElement('script');
+    ds.src = 'data.js';
+    ds.onload = function () { window.parent.postMessage({ gmBoot: 'data', data: window.module.exports }, '*'); };
+    ds.onerror = function () { window.parent.postMessage({ gmBoot: 'error', msg: 'data.js failed to load' }, '*'); };
+    document.head.appendChild(ds);
+    return;
+  }
+
+  function evalCJS(src, name, req) {
+    var module = { exports: {} };
+    var fn = new Function('module', 'exports', 'require', src + '\n//# sourceURL=' + name);
+    fn(module, module.exports, req);
+    return module.exports;
+  }
+  function fetchText(u) {
+    return fetch(u).then(function (r) {
+      if (!r.ok) throw new Error(u + ': HTTP ' + r.status);
+      return r.text();
+    });
+  }
+  function viaFetch() {
+    return Promise.all([fetchText('data.js'), fetchText('engine.js')]).then(function (txt) {
+      var data = evalCJS(txt[0], 'data.js', function () { throw new Error('data.js requires nothing'); });
+      var gm = evalCJS(txt[1], 'engine.js', function () { return data; });
+      return { data: data, gm: gm };
+    });
+  }
+  function viaFrame() {
+    return new Promise(function (resolve, reject) {
+      var done = false;
+      var fr = document.createElement('iframe');
+      fr.setAttribute('aria-hidden', 'true');
+      fr.style.cssText = 'position:absolute;width:0;height:0;border:0;visibility:hidden;';
+      fr.src = location.href.split(/[?#]/)[0] + '?gm-dataframe=1';
+      function finish(err, val) {
+        if (done) return;
+        done = true;
+        window.removeEventListener('message', onMsg);
+        if (fr.parentNode) fr.parentNode.removeChild(fr);
+        if (err) reject(err); else resolve(val);
+      }
+      function onMsg(ev) {
+        var m = ev.data;
+        if (!m || !m.gmBoot || done) return;
+        if (m.gmBoot === 'error') { finish(new Error(m.msg)); return; }
+        window.module = { exports: {} };
+        window.require = function () { return m.data; };
+        var s = document.createElement('script');
+        s.src = 'engine.js';
+        s.onload = function () {
+          var gm = window.module.exports;
+          try { delete window.module; delete window.require; } catch (e) { /* noop */ }
+          finish(null, { data: m.data, gm: gm });
+        };
+        s.onerror = function () { finish(new Error('engine.js failed to load')); };
+        document.head.appendChild(s);
+      }
+      window.addEventListener('message', onMsg);
+      document.body.appendChild(fr);
+      setTimeout(function () {
+        finish(new Error('Could not load game data from file:// (iframe blocked by this browser). ' +
+          'Serve the folder over HTTP instead, e.g. "npx serve" or "python3 -m http.server".'));
+      }, 10000);
+    });
+  }
+
+  var domReady = (document.readyState === 'loading')
+    ? new Promise(function (res) { document.addEventListener('DOMContentLoaded', res); })
+    : Promise.resolve();
+  // file://: wait for DOM ready before iframe path so window.module shims can
+  // never be seen by the deferred PeerJS UMD wrapper.
+  var loaded = (location.protocol === 'file:')
+    ? domReady.then(viaFrame)
+    : viaFetch().catch(function () { return domReady.then(viaFrame); });
+
+  Promise.all([loaded, domReady]).then(function (r) {
+    window.GM = r[0].gm;
+    window.GM_DATA = r[0].data;
+    UI.init();
+  }).catch(function (e) {
+    var app = document.getElementById('app');
+    if (app) {
+      app.innerHTML = '';
+      var box = document.createElement('div');
+      box.className = 'boot-error';
+      var h = document.createElement('h2'); h.textContent = 'Failed to load Grid Monsters';
+      var p = document.createElement('p'); p.textContent = (e && e.message) || String(e);
+      box.appendChild(h); box.appendChild(p);
+      app.appendChild(box);
+    }
+  });
+})();
+</script>
+</body>
+</html>
