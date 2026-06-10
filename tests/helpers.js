@@ -88,10 +88,14 @@ function play(state, steps) {
 }
 
 // Activate unit, optionally move along path, optionally attack, then end activation.
+// If the attack ends the game, stop there: SPEC §1 "A player wins immediately when
+// all enemy units are KO'd", and CONTRACT's action table accepts only {t:'rematch'}
+// in phase 'over' — sending endActivation after a win is an illegal action.
 function act(state, player, unitId, { path, attack } = {}) {
   let s = GM.applyAction(state, player, { t: 'activate', unitId });
   if (path) s = GM.applyAction(s, player, { t: 'move', path });
   if (attack) s = GM.applyAction(s, player, { t: 'attack', ...attack });
+  if (s.phase === 'over') return s;
   return GM.applyAction(s, player, { t: 'endActivation' });
 }
 

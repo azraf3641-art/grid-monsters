@@ -109,6 +109,8 @@ Unit = {
   pinnedTurn: 0,                   // owner-turn number during which movement is blocked; 0 = not pinned
   rootedTurn: 0,                   // same semantics (Talonlock self-root)
   burn: null | { n, ticks },       // ticks remaining (starts 2)
+  burnBy: unitId|null,             // who applied the burn (SPEC §3 attribution); optional —
+                                   // absent/null ⇒ ticks credit no one. Higher/newer N wins on reapply.
   poison: 0,                       // execute stacks, never expire
   chill: 0,                        // stacks; cleared at end of owner's turn
   hexTurns: 0,                     // >0 = hexed; decremented at end of owner's turn
