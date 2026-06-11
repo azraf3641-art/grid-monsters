@@ -752,7 +752,6 @@ function doMove(state, player, action) {
   const cur = state.turn.current;
   if (!cur) fail('no activation in progress');
   if (cur.moved) fail('this unit already moved');
-  if (cur.attacked) fail('cannot move after attacking');
   const u = state.units[cur.unitId];
   if (!u.pos) fail("unit is KO'd");
   const blocked = moveBlocked(state, u);

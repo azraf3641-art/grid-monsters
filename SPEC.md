@@ -1,5 +1,12 @@
 # ENG HANDOFF — Grid Monsters v7 Digital Beta (Claude Code)
 
+> **AMENDMENTS (owner-authorized, post-acceptance).** 2026-06-10, after the
+> full §10 manual acceptance pass: **free activation order** — an activated
+> unit gets one optional move AND one optional attack in EITHER order
+> (supersedes §1 "(a) move (optional), (b) attack (optional)" and §3
+> "after moving"; see CONTRACT.md DEV-PIN 24). Original handoff text below
+> is otherwise unmodified.
+
 You are the Eng instance for this build. This prompt is fully self-contained: everything you need is in this document. Do not invent rules; where this spec pins a ruling, implement it exactly. If you hit genuine ambiguity not covered here, STOP and ask rather than assuming.
 
 ## What you are building

@@ -193,7 +193,7 @@ test('activations: endTurn legal with zero or fewer than 3 activations; turn pas
   assertEq(s2.turn.player, 1, 'one activation then endTurn is legal');
 });
 
-test('activations: per-unit order is move then attack — moving after attacking throws, second attack throws (SPEC §1)', () => {
+test('activations: free order (DEV-PIN 24 owner amendment) — attack then move is legal; second attack and second move throw', () => {
   let s = mkBattle({ units: [
     { form: 'Zapkitt', owner: 0, x: 3, y: 3 },
     { form: 'Mosskit', owner: 1, x: 3, y: 4 },
@@ -202,8 +202,22 @@ test('activations: per-unit order is move then attack — moving after attacking
   s = GM.applyAction(s, 0, { t: 'activate', unitId: 0 });
   s = GM.applyAction(s, 0, { t: 'attack', kind: 'basic', target: { x: 3, y: 4 } });
   assertEq(unit(s, 1).hp, 2, 'basic 2; Electric does not beat Grass (SPEC §7) so no ×2');
-  assertThrows(() => GM.applyAction(s, 0, { t: 'move', path: [{ x: 2, y: 3 }] }), 'move after attack must throw');
+  s = GM.applyAction(s, 0, { t: 'move', path: [{ x: 2, y: 3 }] });
+  assertEq(unit(s, 0).pos, { x: 2, y: 3 }, 'attack-then-move is legal (DEV-PIN 24)');
+  assertEq(unit(s, 0).facing, 'W', 'post-attack move still sets facing from final step');
   assertThrows(() => GM.applyAction(s, 0, { t: 'attack', kind: 'basic', target: { x: 3, y: 4 } }), 'at most one attack per activation');
+  assertThrows(() => GM.applyAction(s, 0, { t: 'move', path: [{ x: 2, y: 4 }] }), 'at most one move per activation');
+});
+
+test('activations: move then attack still works under free order (DEV-PIN 24)', () => {
+  let s = mkBattle({ units: [
+    { form: 'Zapkitt', owner: 0, x: 3, y: 2 },
+    { form: 'Mosskit', owner: 1, x: 3, y: 4 },
+  ] });
+  s = GM.applyAction(s, 0, { t: 'activate', unitId: 0 });
+  s = GM.applyAction(s, 0, { t: 'move', path: [{ x: 3, y: 3 }] });
+  s = GM.applyAction(s, 0, { t: 'attack', kind: 'basic', target: { x: 3, y: 4 } });
+  assertEq(unit(s, 1).hp, 2, 'move-then-attack unchanged');
 });
 
 test('activations: actions from the non-active player throw; activating an enemy unit throws (SPEC §1, CONTRACT)', () => {

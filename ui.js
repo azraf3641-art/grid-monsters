@@ -249,17 +249,25 @@ var UI = (function () {
     }
   }
 
-  // Auto-steps: close attacked activations; resolve choiceless single auras.
+  // Auto-steps: close spent activations; resolve choiceless single auras.
   function runAutoSteps() {
     var s = App.state;
     if (!s || s.phase !== 'battle' || !canAct()) return;
     var key = JSON.stringify([s.log.length, s.turn]);
     if (App.lastAutoKey === key) return;
     var cur = s.turn.current;
-    if (cur && cur.attacked) {
-      App.lastAutoKey = key;
-      dispatch({ t: 'endActivation' });
-      return;
+    if (cur) {
+      // DEV-PIN 24: one optional move AND one optional attack, either order.
+      // Auto-end only when nothing remains: each half is either done or
+      // impossible (GM.reachable/GM.attackChoices encode pin/root/freeze/
+      // no-target rules — empty means that half can't happen).
+      var mayMove = !cur.moved && GM.reachable(s, cur.unitId).length > 0;
+      var mayAttack = !cur.attacked && GM.attackChoices(s, cur.unitId).length > 0;
+      if (!mayMove && !mayAttack) {
+        App.lastAutoKey = key;
+        dispatch({ t: 'endActivation' });
+        return;
+      }
     }
     if (s.turn.pendingAuras) {
       var pend = GM.pendingAuras(s);
@@ -766,7 +774,8 @@ var UI = (function () {
 
     if (cur && atk) {
       fillAttackInfo(st, cur.unitId, atk, vm, get);
-    } else if (cur && !cur.moved && !cur.attacked) {
+    } else if (cur && !cur.moved) {
+      // DEV-PIN 24: the move half stays available before OR after the attack.
       var reach = GM.reachable(st, cur.unitId);
       for (var i = 0; i < reach.length; i++) {
         var c = get(reach[i].x, reach[i].y);
@@ -1176,10 +1185,12 @@ var UI = (function () {
     var u = st.units[cur.unitId];
     var atk = curAttack();
     if (!atk) {
-      if (!cur.moved && !cur.attacked) {
+      if (!cur.moved) {
         var blocked = moveBlockReason(st, u);
         box.appendChild(hint(blocked ? 'Cannot move: ' + blocked
-          : 'Tap a highlighted square to move (Speed ' + GM.effectiveSpeed(st, u.id) + '), or attack.'));
+          : cur.attacked
+            ? 'Attack done — tap a highlighted square to move (Speed ' + GM.effectiveSpeed(st, u.id) + '), or end the activation.'
+            : 'Tap a highlighted square to move (Speed ' + GM.effectiveSpeed(st, u.id) + '), or attack (move and attack, either order).'));
       }
       if (!cur.attacked) {
         var choices = App.vm.choices || [];
@@ -1466,7 +1477,7 @@ var UI = (function () {
     });
     return modalShell('Rules reference', [
       el('h3', { text: 'Turn structure' }),
-      el('p', { class: 'small', text: 'Start of turn: evolutions → burn ticks → enemy Earthquake, then enemy Dread Presence Chill. Then up to 3 different units activate (move, then attack — both optional). End of turn: your Local Storm / Hungry Depths auras resolve (you pick the order). KO all 6 enemy units to win.' }),
+      el('p', { class: 'small', text: 'Start of turn: evolutions → burn ticks → enemy Earthquake, then enemy Dread Presence Chill. Then up to 3 different units activate (one move and one attack, both optional, in either order). End of turn: your Local Storm / Hungry Depths auras resolve (you pick the order). KO all 6 enemy units to win.' }),
       el('h3', { text: 'Type chart' }),
       el('table', { class: 'type-table' }, chartRows),
       el('h3', { text: 'Attack patterns' }),

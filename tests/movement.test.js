@@ -213,7 +213,7 @@ module.exports = [
   },
 
   {
-    name: 'one move per activation; move must precede attack — second move throws, move-after-attack throws (SPEC §1: (a) move then (b) attack)',
+    name: 'one move per activation — second move throws; attack-then-move legal under free order (DEV-PIN 24 owner amendment)',
     fn() {
       const s = mkBattle({ units: [
         { form: 'Bulwhark', owner: 0, x: 3, y: 3 },
@@ -225,8 +225,10 @@ module.exports = [
         'second move in one activation');
       let b = GM.applyAction(s, 0, { t: 'activate', unitId: 0 });
       b = GM.applyAction(b, 0, { t: 'attack', kind: 'basic', target: { x: 4, y: 3 } });
-      assertThrows(() => GM.applyAction(b, 0, { t: 'move', path: [{ x: 3, y: 4 }] }),
-        'move after attacking');
+      b = GM.applyAction(b, 0, { t: 'move', path: [{ x: 3, y: 4 }] });
+      assertEq(b.units[0].pos, { x: 3, y: 4 }, 'attack-then-move legal (DEV-PIN 24)');
+      assertThrows(() => GM.applyAction(b, 0, { t: 'move', path: [{ x: 3, y: 5 }] }),
+        'still only one move per activation after attacking');
     },
   },
 

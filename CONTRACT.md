@@ -134,7 +134,7 @@ Pure: never mutates the input state (clone first). Throws `Error` with a human-r
 | placement | `{t:'unplace', lineId}` | Removes from board (before confirm only). |
 | placement | `{t:'confirm'}` | Requires all 6 placed. P0 places+confirms first, then P1. After both → phase `battle`, then P0's turn 1 starts (run start-of-turn). |
 | battle | `{t:'activate', unitId}` | Own living unit, not yet activated this turn, `activationsUsed < 3`, no activation in progress. Increments `activationsUsed`, sets `turn.current`. |
-| battle | `{t:'move', path:[{x,y},...]}` | Current unit; not yet moved or attacked; path = sequence of orthogonal steps from current pos; length ≤ effective Speed; every step empty (Skulk: intermediate squares may be occupied; final must be empty); blocked if pinned/rooted/Hard-Frozen. Sets facing to final step direction. |
+| battle | `{t:'move', path:[{x,y},...]}` | Current unit; not yet moved (before OR after its attack — see DEV-PIN 24); path = sequence of orthogonal steps from current pos; length ≤ effective Speed; every step empty (Skulk: intermediate squares may be occupied; final must be empty); blocked if pinned/rooted/Hard-Frozen. Sets facing to final step direction. |
 | battle | `{t:'attack', ...}` | Current unit; not yet attacked; rejected if Hard Frozen. See attack params below. |
 | battle | `{t:'endActivation'}` | Closes `turn.current`. |
 | battle | `{t:'endTurn'}` | No activation in progress. Computes the active player's end-of-turn auras (Local Storm / Hungry Depths on living final forms). If any → `pendingAuras` subphase; else turn passes immediately. |
@@ -196,6 +196,7 @@ blinkTo: {x,y},       // blink rider: empty square within Chebyshev 2. Omit to d
 21. **Leviadon's Basic is 2.** The "except Guppling 1" exception names the base form only (the §6 table pins "Basic 1" on the Guppling stage, not the line); evolved Leviadon uses the standard 2.
 22. **No effects on corpses:** a Special's effects (Push/Pin/Burn/Chill/Poison/Hex/Lure) apply only to hit units that SURVIVED the damage step — a victim KO'd by the attack receives no effect. Rules-relevant interaction: the focus choice can decide whether Scorching Howl's near-square Burn lands (doubling-and-killing the near victim forfeits the burn). Surfaced by the playthrough review; flag to PM.
 23. **Rival Singles pass through Tavrik** the way Rival Lances do (immune-not-a-wall generalized to ray scans). Currently unreachable — no Rival final has a Single — recorded so a roster change doesn't silently flip it.
+24. **OWNER AMENDMENT (2026-06-10, post-acceptance patch): free activation order.** An activated unit gets one optional move AND one optional attack in EITHER order (move→attack or attack→move). Supersedes SPEC §1 "(a) move, (b) attack" and §3 "after moving". Everything else unchanged: one move and one attack max per activation; Pin/root/Hard-Freeze restrictions apply at the moment the move/attack is attempted; attack riders (Lunge/Blink) remain part of the attack and do not consume the move.
 
 ## Helpers (exported on GM, pure)
 
