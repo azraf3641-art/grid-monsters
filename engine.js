@@ -90,7 +90,7 @@ function maxHp(state, unitId) { return stageOf(getUnit(state, unitId)).hp; }
 function moveBlocked(state, unit) {
   const t = state.playerTurns[unit.owner];
   if (unit.pinnedTurn === t) return 'pinned';
-  if (unit.rootedTurn === t) return 'rooted (Talonlock)';
+  if (unit.rootedTurn === t) return 'rooted';
   if (isFrozenU(state, unit)) return 'Hard Frozen';
   return null;
 }
@@ -386,6 +386,11 @@ function performAttack(state, attacker, params, meta) {
     }
   }
 
+  // Thorn-root (PATCH-V8 §2): when this unit's pin lands, it is rooted — no lunge involved.
+  if (pinLandedOnTarget && hasTrait(attacker, 'thornRoot') && state.winner === null && !meta) {
+    applyRoot(state, attacker, 'Thorn-root');
+  }
+
   // ---- Riders ----
   const riders = special ? special.riders : [];
   let lungeOffered = false, blinkOffered = false;
@@ -420,8 +425,7 @@ function performAttack(state, attacker, params, meta) {
         attacker.pos = sq(lt.x, lt.y);
         log(state, unitName(attacker) + ' lunges to (' + lt.x + ',' + lt.y + ')');
         if (mandatory) {
-          attacker.rootedTurn = state.playerTurns[attacker.owner] + 1;
-          log(state, 'Talonlock: ' + unitName(attacker) + ' locks on and is rooted');
+          applyRoot(state, attacker, 'Talonlock: ' + unitName(attacker) + ' locks on');
         }
       } else if (mandatory && squares.length) {
         fail('Talonlock: the Lunge is mandatory — lungeTo required');
@@ -579,7 +583,7 @@ function startOfTurn(state) {
     while (st.evolve && evolveMet(u, st.evolve)) {
       u.stage += 1;
       const ns = stageOf(u);
-      u.hp = Math.min(ns.hp, u.hp + 2);            // +2 refresh, capped — never a full heal
+      u.hp = Math.min(ns.hp, u.hp + Math.ceil((ns.hp - u.hp) / 2));  // v8: heal ceil(missing/2) vs NEW max, capped (PATCH-V8 §4)
       log(state, st.name + ' evolves into ' + ns.name + '! (HP ' + u.hp + '/' + ns.hp + ')');
       st = ns;
     }
@@ -746,6 +750,18 @@ function reachable(state, unitId) {
     frontier = next;
   }
   return out;
+}
+
+// Root a unit (Talonlock lock-on / Thorn-root). PATCH-V8 §1 pinned ruling: the root
+// applies immediately — an unused move in the unit's current activation is forfeited.
+function applyRoot(state, unit, label) {
+  unit.rootedTurn = state.playerTurns[unit.owner] + 1;
+  log(state, label + ' and is rooted');
+  const cur = state.turn.current;
+  if (cur && cur.unitId === unit.id && !cur.moved) {
+    cur.moved = true;
+    log(state, unitName(unit) + "'s unused move is forfeited (rooted immediately)");
+  }
 }
 
 function doMove(state, player, action) {

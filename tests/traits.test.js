@@ -1,5 +1,6 @@
-// SPEC §3 traits — Talonlock, Tyrantbane, Backstab/Skulk, Static Quills, Butcher, Telegrab.
-// All expected values derived from SPEC.md + CONTRACT.md ONLY (engine.js not consulted).
+// SPEC §3 traits — Talonlock, Tyrantbane, Backstab/Skulk, Static Quills, Butcher,
+// Thorn-root, Telegrab. All expected values derived from PATCH-V8.md + SPEC.md +
+// CONTRACT.md, with max HP taken from data.js (PATCH-V8 §3) — engine.js not consulted.
 // Damage pipeline (CONTRACT "Damage pipeline"): base → ×2 at most once → flat adds
 // (Backstab +2 / Butcher +2 / Glacial Gore) → Dread −1 (min 1) → Hex +1.
 // Pin model (CONTRACT): pinnedTurn = playerTurns[owner]+1 at application; "Pinned" status
@@ -36,7 +37,7 @@ T.push({
       { form: 'Bulwhark', owner: 1, x: 3, y: 5 },
     ]});
     const s = act(s0, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 }, lungeTo: { x: 3, y: 4 } } });
-    assertEq(unit(s, 1).hp, 6, 'Stoop Strike 2 dmg, no doubling (Flying vs Water, target not pinned)');
+    assertEq(unit(s, 1).hp, 12, 'Stoop Strike 2 dmg, no doubling (Flying vs Water, target not pinned): 14−2');
     assertEq(unit(s, 1).pinnedTurn, 1, 'victim pinned: playerTurns[1]+1 = 0+1');
     assertEq(unit(s, 0).pos, { x: 3, y: 4 }, 'Peregale lunged adjacent to pinned target');
     assertEq(unit(s, 0).rootedTurn, 2, 'self-root: blocks Peregale movement on its controller next turn (playerTurns[0]+1)');
@@ -72,7 +73,7 @@ T.push({
       { form: 'Snapling', owner: 1, x: 6, y: 7 },
     ]});
     const s = act(s0, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } }); // no lungeTo: legal here
-    assertEq(unit(s, 1).hp, 6, 'Stoop Strike still deals 2');
+    assertEq(unit(s, 1).hp, 12, 'Stoop Strike still deals 2 (14−2)');
     assertEq(unit(s, 1).pinnedTurn, 1, 'pin still lands');
     assertEq(unit(s, 0).pos, { x: 7, y: 6 }, 'Peregale stays put');
     assertEq(unit(s, 0).rootedTurn, 0, 'no lock -> no self-root');
@@ -88,7 +89,7 @@ T.push({
       { form: 'Bulwhark', owner: 1, x: 3, y: 4, pinnedTurn: 1 },
     ]});
     const s = act(s0, 0, 0, { attack: { kind: 'basic', target: { x: 3, y: 4 } } });
-    assertEq(unit(s, 1).hp, 4, 'Basic 2 doubled by Predator vs Pinned (Water target: no super-effective in play)');
+    assertEq(unit(s, 1).hp, 10, 'Basic 2 doubled by Predator vs Pinned (Water target: no super-effective in play): 14−4');
   },
 });
 
@@ -100,7 +101,7 @@ T.push({
       { form: 'Grovewarden', owner: 1, x: 3, y: 4, pinnedTurn: 1 },
     ]});
     const s = act(s0, 0, 0, { attack: { kind: 'basic', target: { x: 3, y: 4 } } });
-    assertEq(unit(s, 1).hp, 4, 'Flying beats Grass AND Predator: still 2×2=4, never ×4 (8−4=4)');
+    assertEq(unit(s, 1).hp, 10, 'Flying beats Grass AND Predator: still 2×2=4, never ×4 (14−4=10)');
   },
 });
 
@@ -112,7 +113,7 @@ T.push({
       { form: 'Bulwhark', owner: 1, x: 3, y: 5, pinnedTurn: 1 },
     ]});
     const s = act(s0, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 }, lungeTo: { x: 3, y: 4 } } });
-    assertEq(unit(s, 1).hp, 4, 'Stoop Strike 2 ×2 Predator = 4');
+    assertEq(unit(s, 1).hp, 10, 'Stoop Strike 2 ×2 Predator = 4 (14−4)');
     assertEq(unit(s, 1).pinnedTurn, 1, 're-applied pin: playerTurns[1]+1 = 1');
     assertEq(unit(s, 0).pos, { x: 3, y: 4 }, 'mandatory lunge executed');
   },
@@ -127,10 +128,10 @@ T.push({
       { form: 'Bulwhark',    owner: 1, x: 3, y: 3 },
     ]});
     let s = act(s0, 0, 0, { attack: { kind: 'special', dir: { dx: 1, dy: 0 } } }); // Impale
-    assertEq(unit(s, 2).hp, 6, 'Impale 2, no Butcher bonus (its own pin lands after damage)');
+    assertEq(unit(s, 2).hp, 12, 'Impale 2, no Butcher bonus (its own pin lands after damage): 14−2');
     assertEq(unit(s, 2).pinnedTurn, 1, 'Impale pin landed');
     s = act(s, 0, 1, { attack: { kind: 'basic', target: { x: 3, y: 3 } } });
-    assertEq(unit(s, 2).hp, 2, 'Peregale Basic doubled vs the now-Pinned unit: 6−4=2');
+    assertEq(unit(s, 2).hp, 8, 'Peregale Basic doubled vs the now-Pinned unit: 12−4=8');
   },
 });
 
@@ -146,7 +147,7 @@ T.push({
     assertThrows(() => GM.applyAction(s1, 0, { t: 'move', path: [{ x: 4, y: 3 }] }),
       'pinned unit must not normal-move');
     const s2 = GM.applyAction(s1, 0, { t: 'attack', kind: 'special', dir: { dx: 0, dy: 1 }, lungeTo: { x: 2, y: 5 } });
-    assertEq(unit(s2, 1).hp, 6, 'Stoop Strike resolves (2 dmg) while attacker pinned');
+    assertEq(unit(s2, 1).hp, 12, 'Stoop Strike resolves (2 dmg) while attacker pinned (14−2)');
     assertEq(unit(s2, 0).pos, { x: 2, y: 5 }, 'built-in lunge movement allowed despite pin');
     assertEq(unit(s2, 0).rootedTurn, 2, 'lock adjacent -> self-root');
   },
@@ -173,6 +174,44 @@ T.push({
   },
 });
 
+T.push({
+  name: 'Immediate root forfeits the unused move (DEV-PIN 25 / PATCH-V8 §1): Stoop Strike lock-on with move unspent -> move spent and blocked; without a root the move survives the attack (DEV-PIN 24)',
+  fn() {
+    // (a) Pin lands + lock-on with the move still unspent: root applies immediately, move forfeited.
+    const s0 = mkBattle({ units: [
+      { form: 'Peregale', owner: 0, x: 3, y: 3 },
+      { form: 'Bulwhark', owner: 1, x: 3, y: 5 },
+    ]});
+    let s = GM.applyAction(s0, 0, { t: 'activate', unitId: 0 });
+    s = GM.applyAction(s, 0, { t: 'attack', kind: 'special', dir: { dx: 0, dy: 1 }, lungeTo: { x: 3, y: 4 } });
+    assertEq(unit(s, 0).rootedTurn, 2, 'self-root applied immediately on lock-on');
+    assertEq(s.turn.current.moved, true, 'engine marks the activation\'s move as spent (CONTRACT DEV-PIN 25)');
+    assertThrows(() => GM.applyAction(s, 0, { t: 'move', path: [{ x: 2, y: 4 }] }),
+      'move after lock-on must throw — forfeited despite DEV-PIN 24 free order');
+    // (b) Control — free order without a root: attack-then-move is legal (DEV-PIN 24).
+    const c0 = mkBattle({ units: [
+      { form: 'Peregale', owner: 0, x: 3, y: 3 },
+      { form: 'Bulwhark', owner: 1, x: 3, y: 4 },
+    ]});
+    let c = GM.applyAction(c0, 0, { t: 'activate', unitId: 0 });
+    c = GM.applyAction(c, 0, { t: 'attack', kind: 'basic', target: { x: 3, y: 4 } });
+    c = GM.applyAction(c, 0, { t: 'move', path: [{ x: 2, y: 3 }] });
+    assertEq(unit(c, 0).pos, { x: 2, y: 3 }, 'attack-then-move legal when no root triggered');
+    // (c) Control — pin lands but NO legal lunge square -> no lock, no root, move kept.
+    const n0 = mkBattle({ units: [
+      { form: 'Peregale', owner: 0, x: 7, y: 6 },
+      { form: 'Bulwhark', owner: 1, x: 7, y: 7 },
+      { form: 'Mosskit',  owner: 1, x: 6, y: 6 },
+      { form: 'Snapling', owner: 1, x: 6, y: 7 },
+    ]});
+    let n = GM.applyAction(n0, 0, { t: 'activate', unitId: 0 });
+    n = GM.applyAction(n, 0, { t: 'attack', kind: 'special', dir: { dx: 0, dy: 1 } });
+    assertEq(unit(n, 0).rootedTurn, 0, 'no lock -> no root');
+    n = GM.applyAction(n, 0, { t: 'move', path: [{ x: 7, y: 5 }] });
+    assertEq(unit(n, 0).pos, { x: 7, y: 5 }, 'move NOT forfeited when the root never applied');
+  },
+});
+
 // ---------------------------------------------------------------- TYRANTBANE
 
 T.push({
@@ -185,11 +224,11 @@ T.push({
       { form: 'Snapling',  owner: 0, x: 3, y: 5 },
     ]});
     const s = act(s0, 1, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
-    assertEq(unit(s, 1).hp, 5, 'Tavrik: 0 damage from a Rival Special');
+    assertEq(unit(s, 1).hp, 8, 'Tavrik: 0 damage from a Rival Special');
     assertEq(unit(s, 1).burn, null, 'Tavrik: no Burn from a Rival Special');
-    assertEq(unit(s, 2).hp, 1, 'Snapling beyond Tavrik takes the full 3 (immune, not a wall; Fire vs Water neutral)');
+    assertEq(unit(s, 2).hp, 2, 'Snapling beyond Tavrik takes the full 3 (immune, not a wall; Fire vs Water neutral): 5−3');
     assertEq(unit(s, 2).burn, { n: 2, ticks: 2 }, 'Snapling burned normally');
-    assertEq(unit(s, 0).hp, 4, 'Recoil 2 on Pyroclasm unaffected: 6−2');
+    assertEq(unit(s, 0).hp, 7, 'Recoil 2 on Pyroclasm unaffected: 9−2');
   },
 });
 
@@ -204,8 +243,8 @@ T.push({
       { form: 'Bulwhark',     owner: 1, x: 7, y: 7 },
     ]});
     const sa = endTurn(sa0, 0);
-    assertEq(unit(sa, 1).hp, 5, 'friendly Local Storm: Tavrik untouched');
-    assertEq(unit(sa, 2).hp, 3, 'control: adjacent non-Tavrik ally takes 1');
+    assertEq(unit(sa, 1).hp, 8, 'friendly Local Storm: Tavrik untouched');
+    assertEq(unit(sa, 2).hp, 4, 'control: adjacent non-Tavrik ally takes 1 (5−1)');
     // Enemy Tempestdrake: end of owner 1's turn — its own Mosskit takes 1, enemy Tavrik 0.
     const sb0 = mkBattle({ turn: 1, units: [
       { form: 'Tempestdrake', owner: 1, x: 3, y: 3 },
@@ -213,8 +252,8 @@ T.push({
       { form: 'Tavrik',       owner: 0, x: 3, y: 4 },
     ]});
     const sb = endTurn(sb0, 1);
-    assertEq(unit(sb, 2).hp, 5, 'enemy Local Storm: Tavrik untouched');
-    assertEq(unit(sb, 1).hp, 3, 'control: Tempestdrake\'s own adjacent ally takes 1');
+    assertEq(unit(sb, 2).hp, 8, 'enemy Local Storm: Tavrik untouched');
+    assertEq(unit(sb, 1).hp, 4, 'control: Tempestdrake\'s own adjacent ally takes 1 (5−1)');
   },
 });
 
@@ -227,7 +266,7 @@ T.push({
       { form: 'Gravewinter', owner: 1, x: 3, y: 4 },
     ]});
     const sa = act(sa0, 0, 0, { attack: { kind: 'basic', target: { x: 3, y: 4 } } });
-    assertEq(unit(sa, 1).hp, 6, '10 − (2×2) = 6; Dread −1 must NOT apply to Tavrik');
+    assertEq(unit(sa, 1).hp, 11, '15 − (2×2) = 11; Dread −1 must NOT apply to Tavrik');
     // (b) No Chill: start of owner 0's turn, units adjacent to enemy Gravewinter gain Chill — not Tavrik.
     const sb0 = mkBattle({ turn: 1, units: [
       { form: 'Gravewinter', owner: 1, x: 3, y: 4 },
@@ -248,7 +287,7 @@ T.push({
       { form: 'Tavrik',       owner: 0, x: 3, y: 3 },
     ]});
     const s = act(s0, 1, 0, { attack: { kind: 'basic', target: { x: 3, y: 3 } } });
-    assertEq(unit(s, 1).hp, 3, 'Tavrik 5−2: no immunity vs Rival Basics (Flying vs Fire neutral)');
+    assertEq(unit(s, 1).hp, 6, 'Tavrik 8−2: no immunity vs Rival Basics (Flying vs Fire neutral)');
   },
 });
 
@@ -261,7 +300,7 @@ T.push({
       { form: 'Tavrik',   owner: 0, x: 3, y: 3 },
     ]});
     const sa = endTurn(sa0, 1, [{ unitId: 0, target: 1 }]);
-    assertEq(unit(sa, 1).hp, 4, 'Hungry Depths deals 1 to Tavrik (non-rival aura)');
+    assertEq(unit(sa, 1).hp, 7, 'Hungry Depths deals 1 to Tavrik (non-rival aura): 8−1');
     assertEq(unit(sa, 0).hp, 7, 'Leviadon heals 2 for an enemy bite: 5+2');
     // Earthquake: Tavrik at (4,4), all 4 orthogonal squares empty -> it MUST move exactly 1 step.
     const sb0 = mkBattle({ turn: 1, units: [
@@ -285,9 +324,9 @@ T.push({
       { form: 'Galewyrm',     owner: 1, x: 4, y: 3 },
     ]});
     const sa = act(s0, 0, 0, { attack: { kind: 'basic', target: { x: 3, y: 4 } } });
-    assertEq(unit(sa, 1).hp, 4, 'vs Rival from 8-adjacency: 2×2=4 (8−4)');
+    assertEq(unit(sa, 1).hp, 9, 'vs Rival from 8-adjacency: 2×2=4 (13−4)');
     const sb = act(s0, 0, 0, { attack: { kind: 'basic', target: { x: 4, y: 3 } } });
-    assertEq(unit(sb, 2).hp, 4, 'vs non-rival Galewyrm: plain 2 (6−2), no close-kill doubling');
+    assertEq(unit(sb, 2).hp, 5, 'vs non-rival Galewyrm: plain 2 (7−2), no close-kill doubling');
   },
 });
 
@@ -303,7 +342,7 @@ T.push({
     assertThrows(() => GM.applyAction(s1, 0, { t: 'attack', kind: 'special', dir: { dx: 0, dy: 1 } }),
       'Napebite at a Rival at range 2 must be an illegal declaration');
     const s2 = GM.applyAction(s1, 0, { t: 'attack', kind: 'special', dir: { dx: 1, dy: 0 } });
-    assertEq(unit(s2, 2).hp, 4, 'Napebite at non-rival Galewyrm at range 2 is legal: 6−2');
+    assertEq(unit(s2, 2).hp, 5, 'Napebite at non-rival Galewyrm at range 2 is legal: 7−2');
   },
 });
 
@@ -315,7 +354,7 @@ T.push({
       { form: 'Tempestdrake', owner: 1, x: 3, y: 4 },
     ]});
     const s = act(s0, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
-    assertEq(unit(s, 1).hp, 4, 'Napebite first square = adjacent Rival: doubled, 8−4');
+    assertEq(unit(s, 1).hp, 9, 'Napebite first square = adjacent Rival: doubled, 13−4');
   },
 });
 
@@ -327,7 +366,7 @@ T.push({
       { form: 'Tavrik',    owner: 0, x: 3, y: 3 },
     ]});
     const s = act(s0, 1, 0, { attack: { kind: 'special', dir: { dx: 0, dy: -1 } } }); // Ember Stream range 2
-    assertEq(unit(s, 1).hp, 3, 'Tavrik takes 2 from a non-Rival pre-evolution Special (Fire vs Fire neutral)');
+    assertEq(unit(s, 1).hp, 6, 'Tavrik takes 2 from a non-Rival pre-evolution Special (Fire vs Fire neutral): 8−2');
   },
 });
 
@@ -375,7 +414,7 @@ T.push({
       { form: 'Bulwhark',    owner: 1, x: 3, y: 3 },
     ]});
     const s = act(s0, 0, 0, { attack: { kind: 'basic', target: { x: 3, y: 3 } } });
-    assertEq(unit(s, 1).hp, 4, 'Dark vs Water neutral: 2 + 2 backstab = 4 (8−4)');
+    assertEq(unit(s, 1).hp, 10, 'Dark vs Water neutral: 2 + 2 backstab = 4 (14−4)');
   },
 });
 
@@ -389,7 +428,7 @@ T.push({
       { form: 'Mosskit',     owner: 0, x: 4, y: 3 }, // ally of attacker, 8-adj to defender
     ]});
     const sa = act(flanked, 0, 0, { attack: { kind: 'basic', target: { x: 3, y: 3 } } });
-    assertEq(unit(sa, 1).hp, 4, 'flanking: 2+2=4');
+    assertEq(unit(sa, 1).hp, 10, 'flanking: 2+2=4 (14−4)');
     // Control: no flanker, front attack -> the attacker itself is not "another unit".
     const alone = mkBattle({ units: [
       { form: 'Pantherebus', owner: 0, x: 3, y: 2 },
@@ -397,18 +436,19 @@ T.push({
       { form: 'Mosskit',     owner: 0, x: 7, y: 7 },
     ]});
     const sb = act(alone, 0, 0, { attack: { kind: 'basic', target: { x: 3, y: 3 } } });
-    assertEq(unit(sb, 1).hp, 6, 'no trigger: plain 2');
+    assertEq(unit(sb, 1).hp, 12, 'no trigger: plain 2 (14−2)');
   },
 });
 
 T.push({
   name: 'Backstab math order: +2 added AFTER doubling — rear Basic vs Psychic beside enemy Gravewinter = (2×2)+2−1 = 5, leaving 1 hp (wrong order (2+2)×2−1=7 would KO) (SPEC §3 Backstab; CONTRACT pipeline)',
   fn() {
-    // Archistrix (Psychic, hp 6) at (3,3) faces S -> rear includes (3,4).
+    // Archistrix at (3,3) faces S -> rear includes (3,4). hp: 6 override (v8 max is 9)
+    // keeps the discriminator: right order deals 5 (survives at 1), wrong order 7 (KO).
     // Gravewinter (4,5) is 8-adj to the ATTACKER (3,4) -> Dread −1 on the attack.
     const s0 = mkBattle({ units: [
       { form: 'Pantherebus', owner: 0, x: 3, y: 4 },
-      { form: 'Archistrix',  owner: 1, x: 3, y: 3 },
+      { form: 'Archistrix',  owner: 1, x: 3, y: 3, hp: 6 },
       { form: 'Gravewinter', owner: 1, x: 4, y: 5 },
     ]});
     const s = act(s0, 0, 0, { attack: { kind: 'basic', target: { x: 3, y: 3 } } });
@@ -422,7 +462,9 @@ T.push({
   fn() {
     const s0 = mkBattle({ units: [
       { form: 'Pantherebus', owner: 0, x: 3, y: 4 },
-      { form: 'Archistrix',  owner: 1, x: 3, y: 3 }, // facing S, rear square (3,4)
+      // facing S, rear square (3,4); hp: 6 keeps the spec example's "6-hp Archistrix"
+      // (v8 max is 9 — at full HP the 8 damage would no longer KO).
+      { form: 'Archistrix',  owner: 1, x: 3, y: 3, hp: 6 },
       { form: 'Bulwhark',    owner: 1, x: 7, y: 7 },
     ]});
     const s = act(s0, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: -1 } } }); // Night Fang range 1, lunge declined
@@ -452,8 +494,8 @@ T.push({
       { form: 'Galvaquill', owner: 0, x: 3, y: 3 },
     ]});
     const s = act(s0, 1, 0, { attack: { kind: 'basic', target: { x: 3, y: 3 } } });
-    assertEq(unit(s, 1).hp, 5, 'Galvaquill takes the Basic 2 (7−2)');
-    assertEq(unit(s, 0).hp, 7, 'attacker takes exactly 1 reflect (8−1), once per attack — not per damage point');
+    assertEq(unit(s, 1).hp, 10, 'Galvaquill takes the Basic 2 (12−2)');
+    assertEq(unit(s, 0).hp, 13, 'attacker takes exactly 1 reflect (14−1), once per attack — not per damage point');
     assertEq(unit(s, 1).dealt, 0, 'reflect credits no one: Galvaquill\'s dealt counter stays 0');
   },
 });
@@ -466,9 +508,9 @@ T.push({
       { form: 'Galvaquill', owner: 0, x: 3, y: 3 },
     ]});
     const s = act(s0, 1, 0, { attack: { kind: 'special', dir: { dx: 0, dy: -1 } } }); // Stormbolt range 3
-    assertEq(unit(s, 1).hp, 3, 'Stormbolt 4 dmg (Electric vs Electric neutral): 7−4');
+    assertEq(unit(s, 1).hp, 8, 'Stormbolt 4 dmg (Electric vs Electric neutral): 12−4');
     assertEq(unit(s, 1).pinnedTurn, 2, 'Stormbolt pin: playerTurns[0]+1 = 2');
-    assertEq(unit(s, 0).hp, 6, 'no reflect at range');
+    assertEq(unit(s, 0).hp, 9, 'no reflect at range');
   },
 });
 
@@ -481,16 +523,16 @@ T.push({
       { form: 'Galvaquill', owner: 0, x: 3, y: 3, burn: { n: 2, ticks: 2 } },
     ]});
     const sa = endTurn(burnState, 1);
-    assertEq(unit(sa, 1).hp, 5, 'burn ticked 2 at Galvaquill\'s turn start (7−2)');
-    assertEq(unit(sa, 0).hp, 8, 'no reflect on a burn tick');
+    assertEq(unit(sa, 1).hp, 10, 'burn ticked 2 at Galvaquill\'s turn start (12−2)');
+    assertEq(unit(sa, 0).hp, 14, 'no reflect on a burn tick');
     // Local Storm aura damage from an adjacent enemy Tempestdrake: no reflect.
     const auraState = mkBattle({ turn: 1, units: [
       { form: 'Tempestdrake', owner: 1, x: 3, y: 4 },
       { form: 'Galvaquill',   owner: 0, x: 3, y: 3 },
     ]});
     const sb = endTurn(auraState, 1);
-    assertEq(unit(sb, 1).hp, 6, 'Local Storm dealt 1 to Galvaquill (7−1)');
-    assertEq(unit(sb, 0).hp, 8, 'no reflect on aura damage');
+    assertEq(unit(sb, 1).hp, 11, 'Local Storm dealt 1 to Galvaquill (12−1)');
+    assertEq(unit(sb, 0).hp, 13, 'no reflect on aura damage');
   },
 });
 
@@ -506,9 +548,9 @@ T.push({
     ]});
     // Peregale pins (mandatory lunge to (2,4), still 8-adj to (3,5)).
     let s = act(s0, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 }, lungeTo: { x: 2, y: 4 } } });
-    assertEq(unit(s, 2).hp, 6, 'Stoop Strike 2 (target was not pinned yet)');
+    assertEq(unit(s, 2).hp, 12, 'Stoop Strike 2 (target was not pinned yet): 14−2');
     s = act(s, 0, 1, { attack: { kind: 'basic', target: { x: 3, y: 5 } } });
-    assertEq(unit(s, 2).hp, 2, 'Butcher +2 flat vs Pinned: 2+2=4 (Dark vs Water: no doubling), 6−4');
+    assertEq(unit(s, 2).hp, 8, 'Butcher +2 flat vs Pinned: 2+2=4 (Dark vs Water: no doubling), 12−4');
   },
 });
 
@@ -521,10 +563,70 @@ T.push({
       { form: 'Bulwhark',    owner: 1, x: 3, y: 3 },
     ]});
     let s = act(s0, 0, 0, { attack: { kind: 'special', dir: { dx: 1, dy: 0 } } });
-    assertEq(unit(s, 2).hp, 6, 'first Impale: plain 2 — its pin lands after damage');
+    assertEq(unit(s, 2).hp, 12, 'first Impale: plain 2 — its pin lands after damage (14−2)');
     assertEq(unit(s, 2).pinnedTurn, 1, 'pin landed (playerTurns[1]+1)');
     s = act(s, 0, 1, { attack: { kind: 'special', dir: { dx: -1, dy: 0 } } });
-    assertEq(unit(s, 2).hp, 2, 'second Impale vs now-Pinned target: 2+2=4');
+    assertEq(unit(s, 2).hp, 8, 'second Impale vs now-Pinned target: 2+2=4 (12−4)');
+  },
+});
+
+// ---------------------------------------------------------------- THORN-ROOT / v8 BUTCHERBEAK
+
+T.push({
+  name: 'Thorn-root (DEV-PIN 26 / PATCH-V8 §2): Impale\'s pin roots Butcherbeak immediately (no lunge, move forfeited); rooted next turn it may attack — Impale included — but not move; clears at that turn\'s end',
+  fn() {
+    const s0 = mkBattle({ units: [
+      { form: 'Butcherbeak', owner: 0, x: 3, y: 3 },
+      { form: 'Bulwhark',    owner: 1, x: 3, y: 4 },
+    ]});
+    let s = GM.applyAction(s0, 0, { t: 'activate', unitId: 0 });
+    s = GM.applyAction(s, 0, { t: 'attack', kind: 'special', dir: { dx: 0, dy: 1 } }); // Impale, range 1
+    assertEq(unit(s, 1).hp, 12, 'Impale 2 (Dark vs Water neutral): 14−2');
+    assertEq(unit(s, 1).pinnedTurn, 1, 'Impale pin landed on the victim (playerTurns[1]+1)');
+    assertEq(unit(s, 0).rootedTurn, 2, 'thorn-root: rooted for owner-turn 2 (playerTurns[0]+1)');
+    assertEq(unit(s, 0).pos, { x: 3, y: 3 }, 'no forced lunge on thorn-root (Impale is melee)');
+    assertThrows(() => GM.applyAction(s, 0, { t: 'move', path: [{ x: 2, y: 3 }] }),
+      'unused move forfeited the moment the root applies (DEV-PIN 25)');
+    s = GM.applyAction(s, 0, { t: 'endActivation' });
+    s = endTurn(s, 0);          // -> player 1's turn (victim pinned through it; pin clears at its end)
+    s = endTurn(s, 1);          // -> player 0's turn 2: Butcherbeak is rooted NOW
+    const a = GM.applyAction(s, 0, { t: 'activate', unitId: 0 });
+    assertThrows(() => GM.applyAction(a, 0, { t: 'move', path: [{ x: 2, y: 3 }] }),
+      'rooted: cannot move during its controller\'s next turn');
+    // Impale is usable while rooted (victim's pin expired at the end of ITS turn -> plain 2, no Butcher +2).
+    const b = GM.applyAction(a, 0, { t: 'attack', kind: 'special', dir: { dx: 0, dy: 1 } });
+    assertEq(unit(b, 1).hp, 10, 'Impale while rooted: 12−2');
+    // Root clears at the end of owner-turn 2 (attack with the Basic so no new pin re-roots).
+    let c = GM.applyAction(a, 0, { t: 'attack', kind: 'basic', target: { x: 3, y: 4 } });
+    c = GM.applyAction(c, 0, { t: 'endActivation' });
+    c = endTurn(c, 0);
+    assertEq(unit(c, 0).rootedTurn, 0, 'root cleared at the end of the turn it applied to');
+  },
+});
+
+T.push({
+  name: 'Skulk roster is exactly Duskpard + Pantherebus + Butcherbeak; Butcherbeak carries butcher+skulk+thornRoot and skulks through bodies (DEV-PIN 26 / PATCH-V8 §2)',
+  fn() {
+    const skulkers = [];
+    for (const line of DATA.lines) for (const st of line.stages)
+      if (st.traits.includes('skulk')) skulkers.push(st.name);
+    assertEq(skulkers.sort(), ['Butcherbeak', 'Duskpard', 'Pantherebus'], 'skulk roster (PATCH-V8 §2)');
+    const shriket = DATA.lines.find(l => l.id === 'shriket');
+    assertEq(shriket.stages[0].traits, [], 'Shriket (base): no traits');
+    const bb = shriket.stages[1].traits;
+    assert(bb.includes('butcher') && bb.includes('skulk') && bb.includes('thornRoot'),
+      'Butcherbeak has butcher + skulk + thornRoot');
+    // Pathing: movement passes THROUGH a body but cannot end on one.
+    const p0 = mkBattle({ units: [
+      { form: 'Butcherbeak', owner: 0, x: 3, y: 3 },
+      { form: 'Bulwhark',    owner: 1, x: 3, y: 4 }, // body on the path
+      { form: 'Mosskit',     owner: 1, x: 7, y: 7 },
+    ]});
+    const p1 = GM.applyAction(p0, 0, { t: 'activate', unitId: 0 });
+    assertThrows(() => GM.applyAction(p1, 0, { t: 'move', path: [{ x: 3, y: 4 }] }),
+      'skulk still cannot END on an occupied square');
+    const p2 = GM.applyAction(p1, 0, { t: 'move', path: [{ x: 3, y: 4 }, { x: 3, y: 5 }] });
+    assertEq(unit(p2, 0).pos, { x: 3, y: 5 }, 'Butcherbeak passed through the enemy body and ended beyond it');
   },
 });
 
@@ -544,7 +646,7 @@ T.push({
     const s = act(s0, 0, 0, { attack: { kind: 'special', targetUnit: 1, relocateTo: { x: 3, y: 5 } } });
     assertEq(unit(s, 1).pos, { x: 3, y: 5 }, 'relocated 2 (Chebyshev) over an intervening unit');
     assertEq(unit(s, 1).telegrabs, 1, 'lifetime counter incremented');
-    assertEq(unit(s, 1).hp, 7, 'Telesmash = min(3, counter incl. this grab) = 1; Psychic never super-effective');
+    assertEq(unit(s, 1).hp, 13, 'Telesmash = min(3, counter incl. this grab) = 1 (14−1); Psychic never super-effective');
   },
 });
 
@@ -556,14 +658,14 @@ T.push({
       { form: 'Bulwhark',   owner: 1, x: 4, y: 4, telegrabs: 1 },
     ]});
     const sa = act(grabbedOnce, 0, 0, { attack: { kind: 'special', targetUnit: 1, relocateTo: null } });
-    assertEq(unit(sa, 1).hp, 6, '2nd lifetime grab: 2 dmg (8−2)');
+    assertEq(unit(sa, 1).hp, 12, '2nd lifetime grab: 2 dmg (14−2)');
     assertEq(unit(sa, 1).telegrabs, 2, 'counter at 2');
     const grabbedFive = mkBattle({ units: [
       { form: 'Archistrix', owner: 0, x: 2, y: 2 },
       { form: 'Bulwhark',   owner: 1, x: 4, y: 4, telegrabs: 5 },
     ]});
     const sb = act(grabbedFive, 0, 0, { attack: { kind: 'special', targetUnit: 1, relocateTo: null } });
-    assertEq(unit(sb, 1).hp, 5, '6th grab still capped: min(3,6)=3 (8−3)');
+    assertEq(unit(sb, 1).hp, 11, '6th grab still capped: min(3,6)=3 (14−3)');
     assertEq(unit(sb, 1).telegrabs, 6, 'counter keeps counting past the cap');
   },
 });
@@ -576,7 +678,7 @@ T.push({
       { form: 'Bulwhark', owner: 1, x: 4, y: 4 }, // Chebyshev 2
     ]});
     const sa = act(inRange, 0, 0, { attack: { kind: 'special', targetUnit: 1, relocateTo: { x: 4, y: 3 } } });
-    assertEq(unit(sa, 1).hp, 8, 'Parliowl deals no Telesmash damage');
+    assertEq(unit(sa, 1).hp, 14, 'Parliowl deals no Telesmash damage (still at max 14)');
     assertEq(unit(sa, 1).telegrabs, 1, 'but the grab still counts toward the lifetime counter');
     assertEq(unit(sa, 1).pos, { x: 4, y: 3 }, 'relocated 1 (Parliowl relocate = 1)');
     const tooFar = mkBattle({ units: [
@@ -609,7 +711,7 @@ T.push({
       'relocating onto an occupied square must throw');
     const s2 = GM.applyAction(s1, 0, { t: 'attack', kind: 'special', targetUnit: 1, relocateTo: null });
     assertEq(unit(s2, 1).pos, { x: 0, y: 0 }, 'victim stays in place');
-    assertEq(unit(s2, 1).hp, 7, 'Telesmash still resolves: 1st grab = 1 (8−1)');
+    assertEq(unit(s2, 1).hp, 13, 'Telesmash still resolves: 1st grab = 1 (14−1)');
     assertEq(unit(s2, 1).telegrabs, 1, 'counter still increments');
   },
 });
@@ -623,7 +725,7 @@ T.push({
       { form: 'Tavrik',     owner: 0, x: 5, y: 5 }, // Chebyshev 2 ≤ 3
     ]});
     const sa = act(vsTavrik, 1, 0, { attack: { kind: 'special', targetUnit: 1, relocateTo: { x: 5, y: 4 } } });
-    assertEq(unit(sa, 1).hp, 4, 'Tavrik takes Telesmash 1 (5−1)');
+    assertEq(unit(sa, 1).hp, 7, 'Tavrik takes Telesmash 1 (8−1)');
     assertEq(unit(sa, 1).pos, { x: 5, y: 4 }, 'Tavrik relocated');
     assertEq(unit(sa, 1).telegrabs, 1, 'Tavrik counter increments');
     // A Rival final is equally grabbable.
@@ -632,7 +734,7 @@ T.push({
       { form: 'Tempestdrake', owner: 1, x: 5, y: 5 },
     ]});
     const sb = act(vsRival, 0, 0, { attack: { kind: 'special', targetUnit: 1, relocateTo: null } });
-    assertEq(unit(sb, 1).hp, 7, 'Tempestdrake takes Telesmash 1 (8−1)');
+    assertEq(unit(sb, 1).hp, 12, 'Tempestdrake takes Telesmash 1 (13−1)');
     assertEq(unit(sb, 1).telegrabs, 1, 'tyrant counter increments');
   },
 });
@@ -647,7 +749,7 @@ T.push({
       { form: 'Bulwhark',    owner: 1, x: 3, y: 6, telegrabs: 2 },
     ]});
     const sa = act(dread3, 0, 0, { attack: { kind: 'special', targetUnit: 2, relocateTo: null } });
-    assertEq(unit(sa, 2).hp, 6, '3rd grab: min(3,3)=3, Dread −1 = 2 (8−2)');
+    assertEq(unit(sa, 2).hp, 12, '3rd grab: min(3,3)=3, Dread −1 = 2 (14−2)');
     // Dread min-1 clamp: 1st grab 1 − 1 -> still 1.
     const dread1 = mkBattle({ units: [
       { form: 'Archistrix',  owner: 0, x: 3, y: 3 },
@@ -655,29 +757,29 @@ T.push({
       { form: 'Bulwhark',    owner: 1, x: 3, y: 6 },
     ]});
     const sb = act(dread1, 0, 0, { attack: { kind: 'special', targetUnit: 2, relocateTo: null } });
-    assertEq(unit(sb, 2).hp, 7, '1st grab 1 with Dread: clamped to minimum 1 (8−1)');
+    assertEq(unit(sb, 2).hp, 13, '1st grab 1 with Dread: clamped to minimum 1 (14−1)');
     // Hex: hexed victim takes 1+1 = 2 on a 1st grab. (Psychic doubles vs nothing — no SE anywhere here.)
     const hexed = mkBattle({ units: [
       { form: 'Archistrix', owner: 0, x: 3, y: 3 },
       { form: 'Bulwhark',   owner: 1, x: 3, y: 6, hexTurns: 2 },
     ]});
     const sc = act(hexed, 0, 0, { attack: { kind: 'special', targetUnit: 1, relocateTo: null } });
-    assertEq(unit(sc, 1).hp, 6, 'hexed: 1st-grab Telesmash 1 + 1 Hex = 2 (8−2)');
+    assertEq(unit(sc, 1).hp, 12, 'hexed: 1st-grab Telesmash 1 + 1 Hex = 2 (14−2)');
   },
 });
 
 T.push({
-  name: 'Telegrab counters survive the victim\'s evolution (SPEC §3 "Counters persist for the whole game and survive evolution")',
+  name: 'Telegrab counters survive the victim\'s evolution; v8 refresh heals ceil((8−5)/2)=2 -> 7/8 (SPEC §3 "Counters persist"; PATCH-V8 §4)',
   fn() {
-    // Snapling (telegrabs 1, survived 2) evolves to Shellbrook at the start of its owner's turn;
-    // +2 refresh capped at the new max (4+2 -> capped 5). Counter must persist.
+    // Snapling (telegrabs 1, survived 2) evolves to Shellbrook at the start of its owner's turn.
+    // v8 refresh: missing HP vs the NEW max 8 is 8−5=3 -> heal ceil(3/2)=2 -> 7/8. Counter persists.
     const s0 = mkBattle({ turn: 1, units: [
       { form: 'Snapling', owner: 0, x: 1, y: 1, telegrabs: 1, survived: 2 },
       { form: 'Bulwhark', owner: 1, x: 7, y: 7 },
     ]});
     const s = endTurn(s0, 1);
     assertEq(unit(s, 0).stage, 1, 'evolved to Shellbrook (survived 2 met)');
-    assertEq(unit(s, 0).hp, 5, '+2 refresh capped at new max 5');
+    assertEq(unit(s, 0).hp, 7, 'v8 refresh: 5 + ceil((8−5)/2) = 7 of new max 8');
     assertEq(unit(s, 0).telegrabs, 1, 'lifetime Telegrab counter survived evolution');
   },
 });

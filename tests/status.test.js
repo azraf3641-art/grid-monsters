@@ -1,8 +1,10 @@
 // tests/status.test.js — SPEC §3 status effects & riders (Push, Pin, Burn, Poison,
 // Chill/Hard Freeze, Hex, Lure, Recoil, Lunge, Blink).
 //
-// INDEPENDENCE: every expected value below is derived from SPEC.md + CONTRACT.md only;
-// engine.js was NOT consulted. Damage math and spec citations live in test names/comments.
+// INDEPENDENCE: every expected value below is derived from SPEC.md + CONTRACT.md +
+// PATCH-V8.md (max HP per stage recomputed from data.js, which PATCH-V8 §3 makes
+// authoritative; no damage numbers changed in v8). engine.js was NOT consulted.
+// Damage math and spec citations live in test names/comments.
 //
 // Pin/burn state notes (CONTRACT "State shape", normative):
 //   pinnedTurn = playerTurns[victim.owner] + 1 at application; blocked while
@@ -22,13 +24,13 @@ function test(name, fn) { T.push({ name, fn }); }
 
 // ---------------------------------------------------------------- Push 1
 
-test('Push 1: Tidal Ram shoves victim 1 directly away orthogonally (SPEC §3; 3 dmg Water vs Grass no SE, 4-3=1)', () => {
+test('Push 1: Tidal Ram shoves victim 1 directly away orthogonally (SPEC §3; 3 dmg Water vs Grass no SE, 5-3=2)', () => {
   let s = mkBattle({ units: [
     { form: 'Bulwhark', owner: 0, x: 3, y: 3 },   // Tidal Ram: Single 3, 3 dmg, Push 1, Lunge
-    { form: 'Mosskit', owner: 1, x: 3, y: 5 },    // Grass, 4 hp
+    { form: 'Mosskit', owner: 1, x: 3, y: 5 },    // Grass, 5 hp (PATCH-V8 §3)
   ] });
   s = act(s, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } }); // lunge omitted (optional)
-  assertEq(unit(s, 1).hp, 1, 'Tidal Ram 3 dmg, no doubling');
+  assertEq(unit(s, 1).hp, 2, 'Tidal Ram 3 dmg, no doubling: 5-3=2');
   assertPos(unit(s, 1), 3, 6, 'pushed from (3,5) to (3,6), directly away');
   assertPos(unit(s, 0), 3, 3, 'attacker stayed (lunge declined)');
 });
@@ -40,8 +42,8 @@ test('Push 1: Burst (Maelstrom) pushes each hit enemy directly away, including d
     { form: 'Hootle', owner: 1, x: 3, y: 4 },     // orthogonal neighbor; Psychic/Grass: no SE for Water -> no focus
   ] });
   s = act(s, 0, 0, { attack: { kind: 'special' } });
-  assertEq(unit(s, 1).hp, 1, 'Maelstrom 3 dmg: 4-3=1');
-  assertEq(unit(s, 2).hp, 1, 'Maelstrom 3 dmg: 4-3=1');
+  assertEq(unit(s, 1).hp, 2, 'Maelstrom 3 dmg: 5-3=2');
+  assertEq(unit(s, 2).hp, 2, 'Maelstrom 3 dmg: 5-3=2');
   assertPos(unit(s, 1), 5, 5, 'diagonal push (4,4) -> (5,5), sign vector (+1,+1)');
   assertPos(unit(s, 2), 3, 5, 'orthogonal push (3,4) -> (3,5)');
 });
@@ -53,9 +55,9 @@ test('Push 1 CANCELLED when destination square is occupied (SPEC §3 Push)', () 
     { form: 'Bulwhark', owner: 1, x: 5, y: 5 },   // ...occupied (Chebyshev 2 from attacker: not hit by Burst)
   ] });
   s = act(s, 0, 0, { attack: { kind: 'special' } });
-  assertEq(unit(s, 1).hp, 1, 'damage still applies: 4-3=1');
+  assertEq(unit(s, 1).hp, 2, 'damage still applies: 5-3=2');
   assertPos(unit(s, 1), 4, 4, 'push cancelled entirely, victim stays');
-  assertEq(unit(s, 2).hp, 8, 'blocker outside Burst untouched');
+  assertEq(unit(s, 2).hp, 14, 'blocker outside Burst untouched (Bulwhark max 14)');
 });
 
 test('Push 1 CANCELLED when destination is off-board (SPEC §3 Push)', () => {
@@ -64,7 +66,7 @@ test('Push 1 CANCELLED when destination is off-board (SPEC §3 Push)', () => {
     { form: 'Mosskit', owner: 1, x: 7, y: 7 },    // push to (8,8) = off-board
   ] });
   s = act(s, 0, 0, { attack: { kind: 'special' } });
-  assertEq(unit(s, 1).hp, 1, 'damage still applies: 4-3=1');
+  assertEq(unit(s, 1).hp, 2, 'damage still applies: 5-3=2');
   assertPos(unit(s, 1), 7, 7, 'off-board push cancelled, victim stays');
 });
 
@@ -73,10 +75,10 @@ test('Push 1 CANCELLED when destination is off-board (SPEC §3 Push)', () => {
 test('Pin (Stormbolt): victim cannot move on its controller\'s next turn, CAN attack, clears at that turn\'s end (SPEC §3 Pin)', () => {
   let s = mkBattle({ units: [
     { form: 'Fulgurlynx', owner: 0, x: 4, y: 3 },  // Stormbolt: Single 3, 4 dmg, Pin
-    { form: 'Grovewarden', owner: 1, x: 4, y: 4 }, // Grass 8hp; Electric beats Water/Flying only -> no SE
+    { form: 'Grovewarden', owner: 1, x: 4, y: 4 }, // Grass 14hp; Electric beats Water/Flying only -> no SE
   ] });
   s = act(s, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
-  assertEq(unit(s, 1).hp, 4, 'Stormbolt 4 dmg, no doubling: 8-4=4');
+  assertEq(unit(s, 1).hp, 10, 'Stormbolt 4 dmg, no doubling: 14-4=10');
   // pinnedTurn = playerTurns[1] + 1 = 0 + 1 = 1 (CONTRACT pin timing model)
   assertEq(unit(s, 1).pinnedTurn, 1, 'pin set for victim-owner turn 1');
   s = endTurn(s, 0);
@@ -84,7 +86,7 @@ test('Pin (Stormbolt): victim cannot move on its controller\'s next turn, CAN at
   assertThrows(() => GM.applyAction(s, 1, { t: 'move', path: [{ x: 4, y: 5 }] }),
     'pinned unit moving must be rejected');
   s = GM.applyAction(s, 1, { t: 'attack', kind: 'basic', target: { x: 4, y: 3 } }); // Basic 2, Grass vs Electric no SE
-  assertEq(unit(s, 0).hp, 4, 'pinned unit can still attack: 6-2=4');
+  assertEq(unit(s, 0).hp, 7, 'pinned unit can still attack: 9-2=7');
   s = GM.applyAction(s, 1, { t: 'endActivation' });
   s = endTurn(s, 1);
   assertEq(unit(s, 1).pinnedTurn, 0, 'pin cleared at end of the pinned turn');
@@ -116,8 +118,8 @@ test('Seed Mortar pins ONLY the center-square unit; plus-shape neighbors take da
     { form: 'Bulwhark', owner: 1, x: 3, y: 4 },    // plus arm; Water: Grass beats Water, sole eligible -> auto-focus x2 = 4
   ] });
   s = act(s, 0, 0, { attack: { kind: 'special', target: { x: 4, y: 4 } } });
-  assertEq(unit(s, 1).hp, 6, 'center unit: 8-2=6');
-  assertEq(unit(s, 2).hp, 4, 'arm unit super-effective focus: 8-(2*2)=4');
+  assertEq(unit(s, 1).hp, 12, 'center unit: 14-2=12');
+  assertEq(unit(s, 2).hp, 10, 'arm unit super-effective focus: 14-(2*2)=10');
   assertEq(unit(s, 1).pinnedTurn, 1, 'center unit pinned (playerTurns[1]+1 = 1)');
   assertEq(unit(s, 2).pinnedTurn, 0, 'non-center hit unit NOT pinned');
 });
@@ -127,26 +129,26 @@ test('Seed Mortar pins ONLY the center-square unit; plus-shape neighbors take da
 test('Burn 2 (Magma Stream): 2 dmg at start of each of victim\'s next 2 turns even if never activated; ticks credit the burner (SPEC §3 Burn + attribution)', () => {
   let s = mkBattle({ units: [
     { form: 'Pyroclasm', owner: 0, x: 4, y: 3 },  // Magma Stream: Lance 3, 3 dmg, Burn 2, Recoil 2; Fire
-    { form: 'Bulwhark', owner: 1, x: 4, y: 4 },   // Water 8hp; Fire vs Water no SE
+    { form: 'Bulwhark', owner: 1, x: 4, y: 4 },   // Water 14hp; Fire vs Water no SE
   ] });
   s = act(s, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
-  assertEq(unit(s, 1).hp, 5, 'attack: 8-3=5');
+  assertEq(unit(s, 1).hp, 11, 'attack: 14-3=11');
   assertEq(unit(s, 1).burn.n, 2, 'Burn 2 applied');
   assertEq(unit(s, 1).burn.ticks, 2, 'tick counter starts at 2');
-  assertEq(unit(s, 0).hp, 4, 'Recoil 2: 6-2=4');
+  assertEq(unit(s, 0).hp, 7, 'Recoil 2: 9-2=7');
   assertEq(unit(s, 0).dealt, 3, 'attack damage credited');
   s = endTurn(s, 0); // victim's turn 1 starts; victim is NEVER activated in this test
-  assertEq(unit(s, 1).hp, 3, 'first tick at victim turn start (step 2): 5-2=3');
+  assertEq(unit(s, 1).hp, 9, 'first tick at victim turn start (step 2): 11-2=9');
   assertEq(unit(s, 1).burn.ticks, 1, 'one tick remaining');
   assertEq(unit(s, 0).dealt, 5, 'burn tick credits the burner: 3+2=5');
   s = endTurn(s, 1);
   s = endTurn(s, 0); // victim's turn 2 starts
-  assertEq(unit(s, 1).hp, 1, 'second tick: 3-2=1');
+  assertEq(unit(s, 1).hp, 7, 'second tick: 9-2=7');
   assertEq(unit(s, 1).burn, null, 'burn removed after 2nd tick');
   assertEq(unit(s, 0).dealt, 7, 'burner credited 3+2+2=7');
   s = endTurn(s, 1);
   s = endTurn(s, 0); // victim's turn 3 starts
-  assertEq(unit(s, 1).hp, 1, 'no third tick');
+  assertEq(unit(s, 1).hp, 7, 'no third tick');
 });
 
 test('Burn-tick KO credits the unit that applied the Burn (SPEC §3 damage attribution)', () => {
@@ -170,7 +172,7 @@ test('Burn never stacks: reapplying Burn 1 over an existing Burn 2 resets ticks 
   ] });
   // Cone N from (4,3): near square (4,4) = victim -> burn applies; Fire vs Water no SE -> 3 dmg.
   s = act(s, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
-  assertEq(unit(s, 1).hp, 5, '8-3=5');
+  assertEq(unit(s, 1).hp, 11, '14-3=11');
   assertPos(unit(s, 1), 4, 5, 'pushed (4,4) -> (4,5)');
   assertEq(unit(s, 1).burn.n, 2, 'higher N kept (2 over incoming 1)');
   assertEq(unit(s, 1).burn.ticks, 2, 'ticks reset to 2');
@@ -195,8 +197,8 @@ test('Scorching Howl: Burn 1 lands ONLY on the enemy occupying the cone\'s near 
     { form: 'Grovewarden', owner: 1, x: 3, y: 4 },  // far row; Grass: Fire SE sole eligible -> auto-focus 3*2=6
   ] });
   s = act(s, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
-  assertEq(unit(s, 1).hp, 5, 'near: 8-3=5');
-  assertEq(unit(s, 2).hp, 2, 'far, super-effective focus: 8-6=2');
+  assertEq(unit(s, 1).hp, 11, 'near: 14-3=11');
+  assertEq(unit(s, 2).hp, 8, 'far, super-effective focus: 14-6=8');
   assertEq(unit(s, 1).burn.n, 1, 'near-square enemy burned (Burn 1)');
   assertEq(unit(s, 1).burn.ticks, 2, 'fresh burn: 2 ticks');
   assertEq(unit(s, 2).burn, null, 'far-row enemy NOT burned');
@@ -210,7 +212,7 @@ test('Scorching Howl: EMPTY near square = zero burn even with an enemy in the fa
     { form: 'Bulwhark', owner: 1, x: 4, y: 4 },     // far row
   ] });
   s = act(s, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
-  assertEq(unit(s, 1).hp, 5, '8-3=5');
+  assertEq(unit(s, 1).hp, 11, '14-3=11');
   assertPos(unit(s, 1), 4, 5, 'pushed (4,4) -> (4,5)');
   assertEq(unit(s, 1).burn, null, 'no burn: near square was empty');
 });
@@ -222,10 +224,10 @@ test('Scorching Howl: ALLY on the near square = no burn anywhere; ally unaffecte
     { form: 'Bulwhark', owner: 1, x: 4, y: 4 },     // enemy in far row (satisfies DEV-PIN 1)
   ] });
   s = act(s, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
-  assertEq(unit(s, 1).hp, 4, 'ally takes no damage');
+  assertEq(unit(s, 1).hp, 5, 'ally takes no damage (Mosskit max 5)');
   assertPos(unit(s, 1), 4, 3, 'ally not pushed');
   assertEq(unit(s, 1).burn, null, 'ally not burned');
-  assertEq(unit(s, 2).hp, 5, 'far enemy: 8-3=5');
+  assertEq(unit(s, 2).hp, 11, 'far enemy: 14-3=11');
   assertEq(unit(s, 2).burn, null, 'no burn: near square held an ally');
 });
 
@@ -237,7 +239,7 @@ test('Poison deals NO damage of its own: Marrow Hurl = 1 attack dmg + 1 stack on
     { form: 'Bulwhark', owner: 1, x: 4, y: 4 },
   ] });
   s = act(s, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
-  assertEq(unit(s, 1).hp, 7, 'exactly the 1 attack damage: 8-1=7 (poison adds none)');
+  assertEq(unit(s, 1).hp, 13, 'exactly the 1 attack damage: 14-1=13 (poison adds none)');
   assertEq(unit(s, 1).poison, 1, 'one stack applied');
 });
 
@@ -245,11 +247,11 @@ test('3rd poison stack = instant KO regardless of HP; stacks shared across appli
   // Victim already has 2 stacks (e.g. from Ossiyena); Servenom's first bite supplies the 3rd.
   let s = mkBattle({ units: [
     { form: 'Servenom', owner: 0, x: 4, y: 3 },                 // Venom Fang: Single 1, 2 dmg, Poison; Water vs Water no SE
-    { form: 'Bulwhark', owner: 1, x: 4, y: 4, poison: 2 },      // FULL 8 hp
+    { form: 'Bulwhark', owner: 1, x: 4, y: 4, poison: 2 },      // FULL 14 hp
     { form: 'Grovewarden', owner: 1, x: 0, y: 7 },              // bystander so the game doesn't end
   ] });
   s = act(s, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
-  assertEq(unit(s, 1).pos, null, 'executed at 6 remaining hp by the 3rd stack');
+  assertEq(unit(s, 1).pos, null, 'executed at 12 remaining hp by the 3rd stack');
   assertEq(unit(s, 0).kos, 1, 'KO credited to Servenom (the 3rd-stack applier)');
   assertEq(unit(s, 0).dealt, 2, 'only the 2 attack dmg counts as dealt (DEV-PIN 8: poison credits no damage)');
   assertEq(s.winner, null, 'game continues');
@@ -312,7 +314,7 @@ test('Hard Frozen takes x2 from Fire attacks during the WHOLE frozen window, bef
   ] });
   assert(GM.isFrozen(s, 1), 'frozen mid-window before its own turn');
   s = act(s, 0, 0, { attack: { kind: 'basic', target: { x: 4, y: 4 } } });
-  assertEq(unit(s, 1).hp, 4, 'frozen-Fire doubling: 8-(2*2)=4');
+  assertEq(unit(s, 1).hp, 10, 'frozen-Fire doubling: 14-(2*2)=10');
 });
 
 test('Hard Frozen takes NORMAL damage from non-Fire attacks (SPEC §3 Chill: the x2 is Fire-only)', () => {
@@ -321,17 +323,17 @@ test('Hard Frozen takes NORMAL damage from non-Fire attacks (SPEC §3 Chill: the
     { form: 'Bulwhark', owner: 1, x: 4, y: 4, chill: 2 },     // frozen
   ] });
   s = act(s, 0, 0, { attack: { kind: 'basic', target: { x: 4, y: 4 } } });
-  assertEq(unit(s, 1).hp, 6, 'no doubling for non-Fire: 8-2=6');
+  assertEq(unit(s, 1).hp, 12, 'no doubling for non-Fire: 14-2=12');
 });
 
-test('Global x2 cap: Fire attack on a Hard Frozen GRASS unit (super-effective + frozen-Fire) is still x2, never x4: 8-4=4 (SPEC §3 cap)', () => {
+test('Global x2 cap: Fire attack on a Hard Frozen GRASS unit (super-effective + frozen-Fire) is still x2, never x4: 14-4=10 (SPEC §3 cap)', () => {
   let s = mkBattle({ units: [
     { form: 'Tavrik', owner: 0, x: 4, y: 3 },                   // Fire Basic 2; Fire beats Grass
     { form: 'Grovewarden', owner: 1, x: 4, y: 4, chill: 2 },    // speed 3 - 4 <= 0 -> frozen
   ] });
   assert(GM.isFrozen(s, 1), 'frozen');
   s = act(s, 0, 0, { attack: { kind: 'basic', target: { x: 4, y: 4 } } });
-  assertEq(unit(s, 1).hp, 4, 'capped at one doubling: 8-(2*2)=4, not 8-(2*4)=0');
+  assertEq(unit(s, 1).hp, 10, 'capped at one doubling: 14-(2*2)=10, not 14-(2*4)=6');
 });
 
 // ---------------------------------------------------------------- Hex
@@ -343,17 +345,17 @@ test('Hex: +1 damage on attacks; window = until end of victim\'s 2nd own turn (D
     { form: 'Bulwhark', owner: 1, x: 4, y: 4, hexTurns: 2 },   // freshly hexed
   ] });
   s = act(s, 0, 0, { attack: { kind: 'basic', target: { x: 4, y: 4 } } });
-  assertEq(unit(s, 2).hp, 5, 'hexed: 2+1=3, 8-3=5');
+  assertEq(unit(s, 2).hp, 11, 'hexed: 2+1=3, 14-3=11');
   s = endTurn(s, 0);
   s = endTurn(s, 1); // victim's 1st own turn ends -> hexTurns 1
   assertEq(unit(s, 2).hexTurns, 1, 'window half elapsed, still active');
   s = act(s, 0, 0, { attack: { kind: 'basic', target: { x: 4, y: 4 } } });
-  assertEq(unit(s, 2).hp, 2, 'still hexed across the round: 5-3=2');
+  assertEq(unit(s, 2).hp, 8, 'still hexed across the round: 11-3=8');
   s = endTurn(s, 0);
   s = endTurn(s, 1); // victim's 2nd own turn ends -> hex expires
   assertEq(unit(s, 2).hexTurns, 0, 'expired at end of 2nd own turn');
   s = act(s, 0, 1, { attack: { kind: 'basic', target: { x: 4, y: 4 } } });
-  assertEq(unit(s, 2).hp, 1, 'no more +1: Guppling basic 1, 2-1=1');
+  assertEq(unit(s, 2).hp, 7, 'no more +1: Guppling basic 1, 8-1=7');
 });
 
 test('Hex: +1 on Burn ticks too — Burn 2 ticks 3 on a hexed victim (SPEC §3 Hex)', () => {
@@ -362,7 +364,7 @@ test('Hex: +1 on Burn ticks too — Burn 2 ticks 3 on a hexed victim (SPEC §3 H
     { form: 'Bulwhark', owner: 1, x: 4, y: 4, burn: { n: 2, ticks: 2 }, hexTurns: 2 },
   ] });
   s = endTurn(s, 0); // victim's turn starts: burn tick = 2 + 1 hex = 3
-  assertEq(unit(s, 1).hp, 5, '8-(2+1)=5');
+  assertEq(unit(s, 1).hp, 11, '14-(2+1)=11');
   assertEq(unit(s, 1).burn.ticks, 1, 'tick consumed normally');
 });
 
@@ -372,7 +374,7 @@ test('Hex: +1 on aura damage — Local Storm deals 1+1=2 to a hexed adjacent ene
     { form: 'Bulwhark', owner: 1, x: 4, y: 4, hexTurns: 2 },
   ] });
   s = endTurn(s, 0); // helper auto-resolves the pending Local Storm aura
-  assertEq(unit(s, 1).hp, 6, 'hexed aura damage: 8-(1+1)=6');
+  assertEq(unit(s, 1).hp, 12, 'hexed aura damage: 14-(1+1)=12');
 });
 
 test('Hex does NOT boost Poison (no damage to boost): hexed Marrow Hurl victim takes exactly 1+1=2 and gains 1 stack (SPEC §3 Hex)', () => {
@@ -381,7 +383,7 @@ test('Hex does NOT boost Poison (no damage to boost): hexed Marrow Hurl victim t
     { form: 'Bulwhark', owner: 1, x: 4, y: 4, hexTurns: 2 },
   ] });
   s = act(s, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
-  assertEq(unit(s, 1).hp, 6, 'attack 1 + hex 1 = 2 only; poison itself adds nothing');
+  assertEq(unit(s, 1).hp, 12, 'attack 1 + hex 1 = 2 only; poison itself adds nothing: 14-2=12');
   assertEq(unit(s, 1).poison, 1, 'stack applied as normal');
 });
 
@@ -393,7 +395,7 @@ test('Lure (Lure Light): pull 1 directly toward the attacker, then Hex applies �
     { form: 'Grovewarden', owner: 1, x: 4, y: 4 },
   ] });
   s = act(s, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
-  assertEq(unit(s, 1).hp, 7, '8-1=7');
+  assertEq(unit(s, 1).hp, 13, '14-1=13');
   assertPos(unit(s, 1), 4, 3, 'pulled 1 toward attacker');
   assertEq(unit(s, 1).hexTurns, 2, 'Hex applied after the pull');
 });
@@ -404,7 +406,7 @@ test('Lure pull CANCELLED when the destination is occupied (attacker\'s own squa
     { form: 'Grovewarden', owner: 1, x: 4, y: 4 },   // pull destination (4,3) = attacker: occupied -> cancel
   ] });
   s = act(s, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
-  assertEq(unit(s, 1).hp, 7, '8-1=7');
+  assertEq(unit(s, 1).hp, 13, '14-1=13');
   assertPos(unit(s, 1), 4, 4, 'pull cancelled, victim stays');
   assertEq(unit(s, 1).hexTurns, 2, 'Hex applies regardless of the cancelled pull');
 });
@@ -423,7 +425,7 @@ test('Hex reapplication resets the window to 2 (SPEC §3 Hex "reapplying resets 
 test('Recoil 2 applies AFTER the attack resolves, even though the target died, and can self-KO the attacker (SPEC §3 Recoil)', () => {
   let s = mkBattle({ units: [
     { form: 'Pyroclasm', owner: 0, x: 4, y: 3, hp: 2 },   // Magma Stream Recoil 2 will zero it
-    { form: 'Mosskit', owner: 1, x: 4, y: 4 },            // Grass 4hp: Fire SE sole eligible -> 3*2=6 -> KO
+    { form: 'Mosskit', owner: 1, x: 4, y: 4 },            // Grass 5hp: Fire SE sole eligible -> 3*2=6 -> KO
     { form: 'Tavrik', owner: 0, x: 0, y: 0 },             // bystanders: neither side is wiped
     { form: 'Grovewarden', owner: 1, x: 7, y: 7 },
   ] });
@@ -431,9 +433,9 @@ test('Recoil 2 applies AFTER the attack resolves, even though the target died, a
     [0, { t: 'activate', unitId: 0 }],
     [0, { t: 'attack', kind: 'special', dir: { dx: 0, dy: 1 } }],
   ]);
-  assertEq(unit(s, 1).pos, null, 'target KO\'d: 4 - min(6,...) -> dead');
+  assertEq(unit(s, 1).pos, null, 'target KO\'d: 5 - min(6,...) -> dead');
   assertEq(unit(s, 0).pos, null, 'recoil still applied and self-KO\'d the attacker: 2-2=0');
-  assertEq(unit(s, 0).dealt, 4, 'dealt capped at victim\'s remaining 4 hp (DEV-PIN 8), x2 included');
+  assertEq(unit(s, 0).dealt, 5, 'dealt capped at victim\'s remaining 5 hp (DEV-PIN 8), x2 included');
   assertEq(s.winner, null, 'no winner: both sides still have units');
 });
 
@@ -442,7 +444,7 @@ test('Recoil 2 applies AFTER the attack resolves, even though the target died, a
 test('Lunge legality keys off the target\'s FINAL (post-push) position: adjacent-to-old-square only is illegal (SPEC §3 Lunge)', () => {
   let s = mkBattle({ units: [
     { form: 'Bulwhark', owner: 0, x: 3, y: 3 },   // Tidal Ram: 3 dmg, Push 1, Lunge
-    { form: 'Mosskit', owner: 1, x: 3, y: 5 },    // 4-3=1 hp; pushed (3,5) -> (3,6)
+    { form: 'Mosskit', owner: 1, x: 3, y: 5 },    // 5-3=2 hp; pushed (3,5) -> (3,6)
   ] });
   s = GM.applyAction(s, 0, { t: 'activate', unitId: 0 });
   // (3,4) is 8-adj to the ORIGINAL square (3,5) but Chebyshev 2 from the final (3,6): illegal.
@@ -460,7 +462,7 @@ test('Lunge legality keys off the target\'s FINAL (post-push) position: adjacent
 test('Lunge may take the KO\'d target\'s own square (SPEC §3 Lunge): Pounce x2 vs Electric KOs Zapkitt, Pumarok takes (4,4)', () => {
   let s = mkBattle({ units: [
     { form: 'Pumarok', owner: 0, x: 4, y: 2 },      // Pounce: Single 2, 3 dmg, Lunge; Ground beats Electric -> 3*2=6
-    { form: 'Zapkitt', owner: 1, x: 4, y: 4 },      // 3 hp -> KO
+    { form: 'Zapkitt', owner: 1, x: 4, y: 4 },      // 4 hp, takes 6 -> KO
     { form: 'Grovewarden', owner: 1, x: 0, y: 7 },  // bystander
   ] });
   s = act(s, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 }, lungeTo: { x: 4, y: 4 } } });
@@ -471,10 +473,10 @@ test('Lunge may take the KO\'d target\'s own square (SPEC §3 Lunge): Pounce x2 
 test('Lunge is OPTIONAL: omitting lungeTo leaves the attacker in place (SPEC §3 riders)', () => {
   let s = mkBattle({ units: [
     { form: 'Pumarok', owner: 0, x: 4, y: 2 },
-    { form: 'Grovewarden', owner: 1, x: 4, y: 4 },  // Ground vs Grass no SE: 8-3=5
+    { form: 'Grovewarden', owner: 1, x: 4, y: 4 },  // Ground vs Grass no SE: 14-3=11
   ] });
   s = act(s, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
-  assertEq(unit(s, 1).hp, 5, 'Pounce 3 dmg');
+  assertEq(unit(s, 1).hp, 11, 'Pounce 3 dmg: 14-3=11');
   assertPos(unit(s, 0), 4, 2, 'attacker stayed put');
 });
 
@@ -499,7 +501,7 @@ test('Blink 2 (Mindclaw rider): teleport to an empty square within Chebyshev 2, 
     { form: 'Tavrik', owner: 0, x: 5, y: 3 },      // body directly between (4,3) and (6,3): ignored
   ] });
   s = act(s, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 }, blinkTo: { x: 6, y: 3 } } });
-  assertEq(unit(s, 1).hp, 5, 'Mindclaw 3 dmg: 8-3=5');
+  assertEq(unit(s, 1).hp, 11, 'Mindclaw 3 dmg: 14-3=11');
   assertPos(unit(s, 0), 6, 3, 'blinked through the blocker to Chebyshev-2 square');
 });
 
@@ -517,7 +519,7 @@ test('Blink 2 rejections: Chebyshev 3 illegal, occupied destination illegal; omi
     t: 'attack', kind: 'special', dir: { dx: 0, dy: 1 }, blinkTo: { x: 5, y: 3 },
   }), 'must land on an EMPTY square');
   s = GM.applyAction(s, 0, { t: 'attack', kind: 'special', dir: { dx: 0, dy: 1 } });
-  assertEq(unit(s, 1).hp, 5, 'attack resolved');
+  assertEq(unit(s, 1).hp, 11, 'attack resolved: 14-3=11');
   assertPos(unit(s, 0), 4, 3, 'blink declined: attacker stayed');
 });
 
@@ -530,7 +532,7 @@ test('Pinned unit may still use the Blink rider — Pin blocks only the move ste
   assertThrows(() => GM.applyAction(s, 1, { t: 'move', path: [{ x: 3, y: 4 }] }),
     'normal movement blocked by Pin');
   s = GM.applyAction(s, 1, { t: 'attack', kind: 'special', dir: { dx: 0, dy: 1 }, blinkTo: { x: 2, y: 4 } });
-  assertEq(unit(s, 0).hp, 5, 'Mindclaw 3 dmg: 8-3=5');
+  assertEq(unit(s, 0).hp, 11, 'Mindclaw 3 dmg: 14-3=11');
   assertPos(unit(s, 1), 2, 4, 'rider movement allowed while pinned');
 });
 

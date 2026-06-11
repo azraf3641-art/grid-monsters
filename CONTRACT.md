@@ -55,7 +55,7 @@ Line = { id, num, type, tyrant: bool, stages: [Stage, ...] }  // id = base-form 
 Stage = {
   name, hp, speed, basic,            // basic damage (2 everywhere except Guppling stage 0 = 1)
   special: null | Special,
-  traits: [],                        // of 'talonlock','tyrantbane','skulk','backstab','staticQuills','butcher'
+  traits: [],                        // of 'talonlock','tyrantbane','skulk','backstab','staticQuills','butcher','thornRoot'
   aura: null | 'localStorm' | 'earthquake' | 'dreadPresence' | 'hungryDepths',
   rival: bool,                       // true only on Pyroclasm, Tempestdrake, Gravewinter
   evolve: null | { kind: 'survived'|'dealt'|'ko'|'allyKo', n?: number }   // condition to LEAVE this stage
@@ -141,7 +141,7 @@ Pure: never mutates the input state (clone first). Throws `Error` with a human-r
 | battle | `{t:'aura', unitId, target?: unitId}` | Resolves one pending aura (any order — owner's choice). Local Storm: no target. Hungry Depths: `target` required iff ≥1 unit (either side) is 8-adjacent (must be one of them); with no adjacent unit, omit target (self-damage 1). When `pendingAuras` empties → turn passes. |
 | over | `{t:'rematch', seed, coinWinner}` | Either player. Fresh game (new draft) with supplied seed/coin. |
 
-**Turn pass sequence** (after auras, in order): clear expiring marks on the outgoing player's units (`pinnedTurn`/`rootedTurn` equal to current turn number → 0; `chill → 0`; `hexTurns` decrement, min 0); `survived += 1` for each of their living units; flip `turn.player`; `playerTurns[newPlayer] += 1`; reset activations; run new player's **start-of-turn**: (1) evolutions for their units whose condition is met (repeat while met, one stage at a time; +2 HP capped at new max), (2) Burn ticks on their units (damage credited to the burner; decrement ticks, remove at 0), (3) enemy Earthquake displacement then enemy Dread Presence Chill. Win condition checked after every damage resolution throughout.
+**Turn pass sequence** (after auras, in order): clear expiring marks on the outgoing player's units (`pinnedTurn`/`rootedTurn` equal to current turn number → 0; `chill → 0`; `hexTurns` decrement, min 0); `survived += 1` for each of their living units; flip `turn.player`; `playerTurns[newPlayer] += 1`; reset activations; run new player's **start-of-turn**: (1) evolutions for their units whose condition is met (repeat while met, one stage at a time; v8 refresh: heal ceil(missing/2) measured against the NEW stage's max, capped — PATCH-V8 §4), (2) Burn ticks on their units (damage credited to the burner; decrement ticks, remove at 0), (3) enemy Earthquake displacement then enemy Dread Presence Chill. Win condition checked after every damage resolution throughout.
 
 **Attack action params:**
 
@@ -181,7 +181,7 @@ blinkTo: {x,y},       // blink rider: empty square within Chebyshev 2. Omit to d
 6. **Cone direction** is any of the 4 cardinal directions, chosen freely at declaration (not tied to the attacker's current facing).
 7. **Telegrab range is Chebyshev** ("within 3 squares, any direction, not blocked"); relocation destination = empty square within Chebyshev `relocate` of the victim's square, or `null` (leave in place — also the forced outcome when no legal destination exists; Telesmash still resolves). Parliowl's weakened grab **does** increment the victim's lifetime counter but deals no Telesmash damage. Archistrix's Telesmash damage = `min(3, counter)` counted **including** the current grab.
 8. **"Dealt N damage"** counts actual HP removed (capped at the victim's remaining HP), not overkill. Poison contributes no damage credit. (Flagged to PM as the strictest literal reading.)
-9. **Evolution multiplicity:** at start-of-turn, a unit evolves repeatedly while its next condition is already met (one stage at a time, +2 capped refresh each). In practice at most one stage per turn occurs.
+9. **Evolution multiplicity:** at start-of-turn, a unit evolves repeatedly while its next condition is already met (one stage at a time, the v8 ceil(missing/2) refresh applied per stage). In practice at most one stage per turn occurs.
 10. **Start-of-turn step 3 order:** Earthquake displacement fully resolves before Dread Presence Chill is assessed (adjacency for Chill is post-quake). Among these, multiple instances cannot occur (each line is unique per game).
 11. **Aura/trait damage attribution:** Static Quills reflect, like Recoil and aura damage, credits no one.
 12. **Hungry Depths heal** applies even if the bite KO'd the bitten unit (3 ally / 2 enemy, capped at max HP).
@@ -197,6 +197,8 @@ blinkTo: {x,y},       // blink rider: empty square within Chebyshev 2. Omit to d
 22. **No effects on corpses:** a Special's effects (Push/Pin/Burn/Chill/Poison/Hex/Lure) apply only to hit units that SURVIVED the damage step — a victim KO'd by the attack receives no effect. Rules-relevant interaction: the focus choice can decide whether Scorching Howl's near-square Burn lands (doubling-and-killing the near victim forfeits the burn). Surfaced by the playthrough review; flag to PM.
 23. **Rival Singles pass through Tavrik** the way Rival Lances do (immune-not-a-wall generalized to ray scans). Currently unreachable — no Rival final has a Single — recorded so a roster change doesn't silently flip it.
 24. **OWNER AMENDMENT (2026-06-10, post-acceptance patch): free activation order.** An activated unit gets one optional move AND one optional attack in EITHER order (move→attack or attack→move). Supersedes SPEC §1 "(a) move, (b) attack" and §3 "after moving". Everything else unchanged: one move and one attack max per activation; Pin/root/Hard-Freeze restrictions apply at the moment the move/attack is attempted; attack riders (Lunge/Blink) remain part of the attack and do not consume the move.
+25. **PATCH-V8 (PM, 2026-06-10) — root timing:** if a unit's attack triggers its own root (Talonlock lock-on, Thorn-root), the root applies IMMEDIATELY and any unused move in the current activation is forfeited (engine marks the activation's move as spent and logs it).
+26. **PATCH-V8 — Butcherbeak:** gains Skulk (skulk roster: Duskpard, Pantherebus, Butcherbeak) and **Thorn-root** (`thornRoot` trait): when Impale's Pin lands, Butcherbeak is rooted exactly like Talonlock's self-root — blocked from moving its controller's next turn, may still attack, Impale usable while rooted, clears at that turn's end; no forced lunge. PATCH-V8 also replaces all 57 max-HP values (§3 of the patch; data.js is authoritative) and the evolution refresh (+2-capped → heal ceil(missing/2) vs new max, capped).
 
 ## Helpers (exported on GM, pure)
 

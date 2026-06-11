@@ -10,10 +10,12 @@
 //
 // Coverage (per task): 12-pick draft (tyrant phase + snake), full placement on
 // both sides (incl. one reposition + one unplace), battle to a real win (all 6
-// enemy units KO'd), exercising moves, basics, a Special with a required focus
-// pick (Scorching Howl cone over two Ice units), evolutions with the +2-capped
-// refresh asserted on every stage gain, a Burn tick (incl. a burn-tick KO with
-// attribution), end-of-turn Hungry Depths auras (bite + heal, and heal capped
+// enemy units KO'd), exercising moves, basics, the v8 free activation order
+// (attack-then-move, DEV-PIN 24), a Special with a required focus pick
+// (Scorching Howl cone over two Ice units), evolutions with the v8 refresh
+// (heal ceil(missing/2) vs the NEW max, capped — PATCH-V8 §4) asserted on
+// every stage gain, Burn ticks (incl. a burn-tick KO with attribution),
+// end-of-turn Hungry Depths auras (bite + heal, and heal capped
 // at max), and turns with 3, 2, 1, and 0 activations. Invariants are checked
 // after EVERY applyAction. Finishes with (a) a mid-game JSON round-trip where
 // the same remaining actions are replayed on both copies, and (b) a fresh
@@ -95,7 +97,8 @@ function checkInvariants(prev, next, label) {
       'duplicate unit in activated list at "' + label + '"');
   }
 
-  // stages never regress; every evolution is exactly +2 HP capped at the new max
+  // stages never regress; every evolution heals exactly ceil(missing/2)
+  // measured against the NEW stage's max, capped (PATCH-V8 §4)
   prev.units.forEach((pu, i) => {
     const nu = next.units[i];
     assert(nu, 'unit ' + i + ' vanished at "' + label + '"');
@@ -105,9 +108,10 @@ function checkInvariants(prev, next, label) {
         'unexpected multi-stage evolution in one action at "' + label + '"');
       assert(!pu.burn, 'evolving unit was burning — refresh check would be confounded');
       const newMax = LINE_BY_ID[nu.lineId].stages[nu.stage].hp;
-      assertEq(nu.hp, Math.min(newMax, pu.hp + 2),
-        'evolution refresh must be exactly +2 capped at new max for ' + nameOf(nu) +
-        ' (was ' + pu.hp + ', new max ' + newMax + ') at "' + label + '"');
+      const missing = Math.max(0, newMax - pu.hp);
+      assertEq(nu.hp, Math.min(newMax, pu.hp + Math.ceil(missing / 2)),
+        'evolution refresh must be exactly heal ceil(missing/2) vs new max, capped, for ' +
+        nameOf(nu) + ' (was ' + pu.hp + ', new max ' + newMax + ') at "' + label + '"');
       evolutionsSeen.push(nameOf(pu) + '->' + nameOf(nu) +
         ' (' + pu.hp + '->' + nu.hp + '/' + newMax + ')');
       tr('    EVOLUTION ' + evolutionsSeen[evolutionsSeen.length - 1]);
@@ -261,50 +265,61 @@ function main() {
   endTurn(1);
 
   // ---- P0 turn 2: first blood (3 activations, basics) ----
-  act(0, 1, { attack: { kind: 'basic', target: { x: 2, y: 4 } } });  // Sootpup -> Zapkitt 3->1
-  assertEq(U(7).hp, 1, 'Zapkitt at 1 hp after a 2-damage Basic');
-  act(0, 3, { path: [{ x: 5, y: 4 }], attack: { kind: 'basic', target: { x: 5, y: 5 } } }); // Shriket -> Pupfloe 4->2
-  assertEq(U(9).hp, 2, 'Pupfloe at 2 hp');
+  act(0, 1, { attack: { kind: 'basic', target: { x: 2, y: 4 } } });  // Sootpup -> Zapkitt 4->2
+  assertEq(U(7).hp, 2, 'Zapkitt at 2 hp after a 2-damage Basic');
+  act(0, 3, { path: [{ x: 5, y: 4 }], attack: { kind: 'basic', target: { x: 5, y: 5 } } }); // Shriket -> Pupfloe 5->3
+  assertEq(U(9).hp, 3, 'Pupfloe at 3 hp');
   act(0, 2, { path: [{ x: 4, y: 2 }] });                             // Guppling creeps up
   endTurn(0);
 
   // ---- P1 turn 2: Zapkitt bites back; flanks advance ----
-  act(1, 7, { attack: { kind: 'basic', target: { x: 2, y: 3 } } });  // Zapkitt -> Sootpup 4->2
-  assertEq(U(1).hp, 2, 'Sootpup at 2 hp');
+  act(1, 7, { attack: { kind: 'basic', target: { x: 2, y: 3 } } });  // Zapkitt -> Sootpup 5->3
+  assertEq(U(1).hp, 3, 'Sootpup at 3 hp');
   act(1, 11, { path: [{ x: 6, y: 5 }, { x: 6, y: 4 }] });            // Shadekit
   act(1, 10, { path: [{ x: 1, y: 5 }, { x: 1, y: 4 }] });            // Slithrin
   endTurn(1);
 
-  // ---- P0 turn 3: Sootpup takes the KO it needs to evolve ----
-  act(0, 1, { attack: { kind: 'basic', target: { x: 2, y: 4 } } });  // Zapkitt KO
+  // ---- P0 turn 3: Sootpup takes the KO it needs to evolve, then steps onto
+  // the vacated square — v8 free activation order: attack BEFORE move (DEV-PIN 24) ----
+  step(0, { t: 'activate', unitId: 1 });
+  step(0, { t: 'attack', kind: 'basic', target: { x: 2, y: 4 } });   // Zapkitt 2->0 KO
+  tr('  P1 Sootpup attacks (basic), attack-then-move order');
   assertEq(U(7).pos, null, "Zapkitt KO'd");
   assertEq(U(1).kos, 1, 'KO credited to Sootpup');
-  act(0, 3, { attack: { kind: 'basic', target: { x: 6, y: 4 } } });  // Shriket -> Shadekit 4->2 (dealt 4)
+  step(0, { t: 'move', path: [{ x: 2, y: 4 }] });                    // onto the corpse's square
+  tr('  P1 Sootpup moves to (2,4) AFTER attacking (v8 either-order)');
+  assertEq(U(1).pos, { x: 2, y: 4 }, 'attack-then-move is legal under v8 (DEV-PIN 24)');
+  expectThrows(() => GM.applyAction(cur, 0, { t: 'move', path: [{ x: 2, y: 3 }] }),
+    'a second move in the same activation');
+  step(0, { t: 'endActivation' });
+  act(0, 3, { attack: { kind: 'basic', target: { x: 6, y: 4 } } });  // Shriket -> Shadekit 5->3 (dealt 4)
   assertEq(U(3).dealt, 4, 'Shriket has dealt 4 (evolution threshold)');
   act(0, 4, { path: [{ x: 1, y: 2 }, { x: 1, y: 3 }] });             // Mystikit
   endTurn(0);
 
   // ---- P1 turn 3: light retaliation ----
-  act(1, 9, { attack: { kind: 'basic', target: { x: 5, y: 4 } } });  // Pupfloe -> Shriket 4->2
-  act(1, 10, { attack: { kind: 'basic', target: { x: 1, y: 3 } } }); // Slithrin -> Mystikit 4->2
+  act(1, 9, { attack: { kind: 'basic', target: { x: 5, y: 4 } } });  // Pupfloe -> Shriket 5->3
+  act(1, 10, { attack: { kind: 'basic', target: { x: 1, y: 3 } } }); // Slithrin -> Mystikit 5->3
   act(1, 11, { path: [{ x: 6, y: 3 }] });                            // Shadekit
   endTurn(1);
 
-  // ---- P0 turn 4 start: THREE evolutions, +2-capped refresh asserted ----
+  // ---- P0 turn 4 start: THREE evolutions, v8 ceil(missing/2) refresh asserted ----
   // (checkInvariants verified the formula; pin the exact expectations too)
-  assert(U(0).stage === 1 && U(0).hp === 6, 'Wyrmlet->Galewyrm at 4+2=6/6');
-  assert(U(1).stage === 1 && U(1).hp === 4, 'Sootpup->Hellhowl at 2+2=4/7 — NOT a full heal');
-  assert(U(3).stage === 1 && U(3).hp === 4, 'Shriket->Butcherbeak at 2+2=4/5');
+  assert(U(0).stage === 1 && U(0).hp === 6,
+    'Wyrmlet->Galewyrm: 5 + ceil((7-5)/2) = 6/7 — full old HP is NOT full at the new max');
+  assert(U(1).stage === 1 && U(1).hp === 7,
+    'Sootpup->Hellhowl: 3 + ceil((11-3)/2) = 7/11 — NOT a full heal');
+  assert(U(3).stage === 1 && U(3).hp === 6, 'Shriket->Butcherbeak: 3 + ceil((9-3)/2) = 6/9');
 
   // Galewyrm steps aside and uses its weakened Special (Single, no effect/rider).
   act(0, 0, { path: [{ x: 3, y: 4 }], attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
-  assertEq(U(6).hp, 2, 'Gale Breath: 2 damage to Cinderling at range 2');
+  assertEq(U(6).hp, 3, 'Gale Breath: 2 damage to Cinderling at range 2 (5->3)');
 
   // Hellhowl lines up the cone: near square = Floecub(4,4), far row holds Pupfloe(5,5).
   step(0, { t: 'activate', unitId: 1 });
   assertEq(GM.effectiveSpeed(cur, 1), 5, 'Hellhowl speed 5');
   assert(GM.reachable(cur, 1).some(r => r.x === 4 && r.y === 3), 'Hellhowl can reach (4,3)');
-  step(0, { t: 'move', path: [{ x: 3, y: 3 }, { x: 4, y: 3 }] });
+  step(0, { t: 'move', path: [{ x: 2, y: 3 }, { x: 3, y: 3 }, { x: 4, y: 3 }] });
   tr('  P1 Hellhowl moves to (4,3)');
   const pv0 = GM.previewAttack(cur, 1, { kind: 'special', dir: { dx: 0, dy: 1 } });
   assert(pv0.legal && pv0.needsFocus, 'cone over two Ice units needs a focus pick');
@@ -317,32 +332,37 @@ function main() {
   assertEq(pv1.hits.find(h => h.unitId === 8).dmg, 3, 'unfocused Floecub takes 3');
   step(0, { t: 'attack', kind: 'special', dir: { dx: 0, dy: 1 }, focus: 9 });
   tr('  P1 Hellhowl cones N with focus on Pupfloe');
-  assertEq(U(9).pos, null, "Pupfloe KO'd by the super-effective focus (2hp vs 6)");
-  assertEq(U(8).hp, 1, 'Floecub 4->1');
+  assertEq(U(9).pos, null, "Pupfloe KO'd by the super-effective focus (3hp vs 6)");
+  assertEq(U(8).hp, 2, 'Floecub 5->2');
   assertEq(U(8).pos, { x: 4, y: 5 }, 'Floecub pushed 1 away from the attacker');
   assertEq(U(8).burn, { n: 1, ticks: 2 }, 'Burn 1 landed on the near-square unit');
   assertEq(U(8).burnBy, 1, 'burn attributed to Hellhowl');
   step(0, { t: 'endActivation' });
 
-  act(0, 3, { attack: { kind: 'basic', target: { x: 6, y: 3 } } }); // Butcherbeak -> Shadekit KO
-  assertEq(U(11).pos, null, "Shadekit KO'd");
-  const dealtBefore = U(1).dealt, kosBefore = U(1).kos;
+  act(0, 3, { attack: { kind: 'basic', target: { x: 6, y: 3 } } }); // Butcherbeak -> Shadekit 3->1
+  assertEq(U(11).hp, 1, 'Shadekit at 1 hp (v8: 5-base survives 2+2, dies later)');
+  const dealtT4 = U(1).dealt, kosT4 = U(1).kos;
   endTurn(0);
 
-  // ---- P1 turn 4 start: Burn tick KOs Floecub, credited to Hellhowl ----
-  assertEq(U(8).pos, null, "burn tick (1 dmg) KO'd the 1-hp Floecub at its turn start");
-  assertEq(U(1).dealt, dealtBefore + 1, 'burn tick damage credited to Hellhowl');
-  assertEq(U(1).kos, kosBefore + 1, 'burn-tick KO credited to Hellhowl');
+  // ---- P1 turn 4 start: first Burn tick — Floecub 2->1, credited to Hellhowl ----
+  assertEq(U(8).hp, 1, 'first burn tick (1 dmg) brought Floecub to 1 hp at its turn start');
+  assertEq(U(8).burn, { n: 1, ticks: 1 }, 'one burn tick remaining');
+  assertEq(U(1).dealt, dealtT4 + 1, 'burn tick damage credited to Hellhowl');
+  assertEq(U(1).kos, kosT4, 'no KO from the first tick');
   // P1 banks the whole turn: a legal ZERO-activation turn.
   tr('  P2 passes (0 activations)');
   endTurn(1);
 
   // ---- P0 turn 5 start: Guppling -> Leviadon (survived 4) ----
-  assert(U(2).stage === 1 && U(2).hp === 5, 'Guppling->Leviadon at 3+2=5/8 — NOT a full heal');
-  act(0, 1, { path: [{ x: 4, y: 4 }, { x: 4, y: 5 }, { x: 3, y: 5 }],
-    attack: { kind: 'basic', target: { x: 3, y: 6 } } });            // Hellhowl -> Cinderling KO
-  assertEq(U(6).pos, null, "Cinderling KO'd");
+  assert(U(2).stage === 1 && U(2).hp === 9,
+    'Guppling->Leviadon: 4 + ceil((13-4)/2) = 9/13 — NOT a full heal');
+  // Hellhowl swings west and cones the 3-hp Cinderling (3 dmg, Fire vs Fire:
+  // no doubling, single enemy in the cone so no focus pick is needed).
+  act(0, 1, { path: [{ x: 3, y: 3 }, { x: 2, y: 3 }, { x: 2, y: 4 }, { x: 2, y: 5 }, { x: 3, y: 5 }],
+    attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });           // Hellhowl -> Cinderling KO
+  assertEq(U(6).pos, null, "Cinderling KO'd (3-dmg cone vs 3 hp)");
   act(0, 2, { path: [{ x: 4, y: 3 }] });                            // Leviadon next to Galewyrm
+  const dealtT5 = U(1).dealt, kosT5 = U(1).kos;
   // End with only 2 activations used; Hungry Depths is mandatory — bite an ally.
   step(0, { t: 'endTurn' });
   activationCounts.push(2);
@@ -357,9 +377,13 @@ function main() {
   step(0, { t: 'aura', unitId: 2, target: 0 });
   tr('  P1 Leviadon bites ally Galewyrm (1 dmg, heals 3)');
   assertEq(U(0).hp, 5, 'Galewyrm bitten for 1 (6->5)');
-  assertEq(U(2).hp, 8, 'Leviadon healed 3 for an ally bite (5->8)');
+  assertEq(U(2).hp, 12, 'Leviadon healed 3 for an ally bite (9->12)');
   tr('— P2 turn 5 —');
 
+  // ---- P1 turn 5 start: second Burn tick KOs Floecub, credited to Hellhowl ----
+  assertEq(U(8).pos, null, "second burn tick (1 dmg) KO'd the 1-hp Floecub at its turn start");
+  assertEq(U(1).dealt, dealtT5 + 1, 'burn tick damage credited to Hellhowl');
+  assertEq(U(1).kos, kosT5 + 1, 'burn-tick KO credited to Hellhowl');
   // ---- P1 turn 5: lone Slithrin retreats (1 activation) ----
   act(1, 10, { path: [{ x: 1, y: 5 }, { x: 1, y: 6 }] });
   endTurn(1);
@@ -371,39 +395,41 @@ function main() {
 
   // ---- P0 turn 6: chase (1 activation) ----
   act(0, 1, { path: [{ x: 2, y: 5 }] , attack: { kind: 'basic', target: { x: 1, y: 6 } } });
-  assertEq(U(10).hp, 2, 'Slithrin 4->2');
+  assertEq(U(10).hp, 3, 'Slithrin 5->3');
   step(0, { t: 'endTurn' });
   activationCounts.push(1);
   assertEq(cur.turn.pendingAuras, [2], 'Hungry Depths pending again');
   step(0, { t: 'aura', unitId: 2, target: 0 });
   tr('  P1 Leviadon bites ally Galewyrm again (heal capped at max)');
   assertEq(U(0).hp, 4, 'Galewyrm bitten again (5->4)');
-  assertEq(U(2).hp, 8, 'Leviadon heal capped at max HP (stays 8)');
+  assertEq(U(2).hp, 13, 'Leviadon heal capped at max HP (12+3 -> 13)');
   tr('— P2 turn 6 —');
 
-  // ---- P1 turn 6: Slithrin's Water Basic is super-effective vs Fire — 2x2=4 KOs Hellhowl ----
+  // ---- P1 turn 6: Slithrin's Water Basic is super-effective vs Fire — 2x2=4 ----
   act(1, 10, { attack: { kind: 'basic', target: { x: 2, y: 5 } } });
-  assert(U(1).pos === null && U(1).hp === 0,
-    "Hellhowl (4 hp, Fire) KO'd by Slithrin's super-effective Water Basic (2x2=4)");
+  assertEq(U(1).hp, 3,
+    "Hellhowl (Fire) hit by Slithrin's super-effective Water Basic for 2x2=4 (7->3)");
   assertEq(U(10).dealt, 6, 'Slithrin credited 2+4 dealt');
-  assertEq(U(10).kos, 1, 'KO credited to Slithrin');
   endTurn(1);
 
   // ---- P0 turn 7: the kill — win mid-activation ----
-  act(0, 0, { path: [{ x: 2, y: 4 }, { x: 2, y: 5 }],
-    attack: { kind: 'basic', target: { x: 1, y: 6 } } });            // Galewyrm finishes Slithrin
-  tr('  P1 Galewyrm finishes Slithrin — game over');
+  act(0, 3, { attack: { kind: 'basic', target: { x: 6, y: 3 } } }); // Butcherbeak KOs Shadekit
+  assertEq(U(11).pos, null, "Shadekit KO'd");
+  act(0, 1, { path: [{ x: 1, y: 5 }],
+    attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });           // Hellhowl cones Slithrin
+  tr('  P1 Hellhowl cones down Slithrin — game over');
   assertEq(cur.phase, 'over', 'game over on the last KO');
   assertEq(cur.winner, 0, 'P1 wins');
   assert(cur.units.filter(u => u.owner === 1).every(u => u.pos === null && u.hp === 0),
     "all 6 P2 units KO'd");
-  assertEq(U(10).stage, 0, 'Slithrin hit dealt 4 but died before its evolution turn started');
+  assertEq(U(10).stage, 0, 'Slithrin had dealt 6 (>= 3) but died before its evolution turn started');
   expectThrows(() => GM.applyAction(cur, 0, { t: 'endActivation' }),
     'any battle action after the game is over');
   assertEq(cur.playerTurns, [7, 6], '13 battle turns played (7 + 6)');
 
   // ---------- coverage checks ----------
-  assertEq(evolutionsSeen.length, 4, 'four evolutions observed with +2-capped refresh');
+  assertEq(evolutionsSeen.length, 4,
+    'four evolutions observed with the v8 ceil(missing/2)-capped refresh');
   assert(activationCounts.includes(3), 'a 3-activation turn happened');
   assert(activationCounts.includes(2), 'a 2-activation turn happened');
   assert(activationCounts.includes(1), 'a 1-activation turn happened');

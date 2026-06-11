@@ -182,12 +182,12 @@ module.exports = [
     fn() {
       const s = mkBattle({ units: [
         { form: 'Bulwhark', owner: 0, x: 3, y: 3 },
-        { form: 'Butcherbeak', owner: 1, x: 3, y: 4 },  // hp 5
+        { form: 'Butcherbeak', owner: 1, x: 3, y: 4 },  // hp 9 (PATCH-V8 §3)
       ]});
       let s1 = GM.applyAction(s, 0, { t: 'activate', unitId: 0 });
       s1 = GM.applyAction(s1, 0, { t: 'attack', kind: 'basic', target: { x: 3, y: 4 } });
       s1 = GM.applyAction(s1, 0, { t: 'endActivation' });
-      assertEq(unit(s1, 1).hp, 3, 'Basic 2: 5 -> 3');
+      assertEq(unit(s1, 1).hp, 7, 'Basic 2: 9 -> 7');
       assertEq(unit(s1, 0).pos, { x: 3, y: 3 }, 'never moved');
       assertEq(unit(s1, 0).facing, 'N', 'facing untouched by not moving / by attacking');
     },
@@ -333,10 +333,10 @@ module.exports = [
     fn() {
       const s = mkBattle({ units: [
         { form: 'Bulwhark', owner: 0, x: 3, y: 3, facing: 'E' },
-        { form: 'Maulberg', owner: 1, x: 3, y: 4 },  // hp 8
+        { form: 'Maulberg', owner: 1, x: 3, y: 4 },  // hp 13 (PATCH-V8 §3)
       ]});
       const s1 = act(s, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });  // lunge declined
-      assertEq(unit(s1, 1).hp, 5, 'Tidal Ram 3 dmg: 8 -> 5');
+      assertEq(unit(s1, 1).hp, 10, 'Tidal Ram 3 dmg: 13 -> 10');
       assertEq(unit(s1, 1).pos, { x: 3, y: 5 }, 'pushed 1 away from attacker');
       assertEq(unit(s1, 1).facing, 'S', 'push never changes facing');
       assertEq(unit(s1, 0).facing, 'E', 'attacking never changes facing');
@@ -348,10 +348,10 @@ module.exports = [
     fn() {
       const s = mkBattle({ units: [
         { form: 'Pumarok', owner: 0, x: 3, y: 3, facing: 'E' },
-        { form: 'Maulberg', owner: 1, x: 3, y: 5 },  // hp 8, range-2 single up N
+        { form: 'Maulberg', owner: 1, x: 3, y: 5 },  // hp 13 (PATCH-V8 §3), range-2 single up N
       ]});
       const s1 = act(s, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 }, lungeTo: { x: 2, y: 4 } } });
-      assertEq(unit(s1, 1).hp, 5, 'Pounce 3 dmg: 8 -> 5');
+      assertEq(unit(s1, 1).hp, 10, 'Pounce 3 dmg: 13 -> 10');
       assertEq(unit(s1, 0).pos, { x: 2, y: 4 }, 'lunged 8-adjacent to target');
       assertEq(unit(s1, 0).facing, 'E', 'lunge never changes facing');
     },
@@ -362,10 +362,10 @@ module.exports = [
     fn() {
       const s = mkBattle({ units: [
         { form: 'Velvesper', owner: 0, x: 3, y: 3, facing: 'W' },
-        { form: 'Maulberg', owner: 1, x: 3, y: 4 },  // hp 8, Mindclaw range 1
+        { form: 'Maulberg', owner: 1, x: 3, y: 4 },  // hp 13 (PATCH-V8 §3), Mindclaw range 1
       ]});
       const s1 = act(s, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 }, blinkTo: { x: 5, y: 3 } } });
-      assertEq(unit(s1, 1).hp, 5, 'Mindclaw 3 dmg: 8 -> 5');
+      assertEq(unit(s1, 1).hp, 10, 'Mindclaw 3 dmg: 13 -> 10');
       assertEq(unit(s1, 0).pos, { x: 5, y: 3 }, 'blinked within Chebyshev 2');
       assertEq(unit(s1, 0).facing, 'W', 'blink never changes facing');
     },
@@ -376,11 +376,11 @@ module.exports = [
     fn() {
       const s = mkBattle({ units: [
         { form: 'Archistrix', owner: 0, x: 3, y: 3 },
-        { form: 'Maulberg', owner: 1, x: 5, y: 5 },  // hp 8; Chebyshev 2 <= range 3
+        { form: 'Maulberg', owner: 1, x: 5, y: 5 },  // hp 13 (PATCH-V8 §3); Chebyshev 2 <= range 3
       ]});
       const s1 = act(s, 0, 0, { attack: { kind: 'special', targetUnit: 1, relocateTo: { x: 5, y: 3 } } });
       assertEq(unit(s1, 1).pos, { x: 5, y: 3 }, 'relocated within Chebyshev 2 of victim');
-      assertEq(unit(s1, 1).hp, 7, 'Telesmash = lifetime count incl. this grab = 1: 8 -> 7');
+      assertEq(unit(s1, 1).hp, 12, 'Telesmash = lifetime count incl. this grab = 1: 13 -> 12');
       assertEq(unit(s1, 1).telegrabs, 1);
       assertEq(unit(s1, 1).facing, 'S', 'telegrab relocation never changes facing');
     },
@@ -418,10 +418,10 @@ module.exports = [
       for (const [facing, apos] of cases) {
         const s = mkBattle({ units: [
           { form: 'Pantherebus', owner: 0, x: apos.x, y: apos.y },
-          { form: 'Bulwhark', owner: 1, x: 3, y: 3, facing },  // hp 8
+          { form: 'Bulwhark', owner: 1, x: 3, y: 3, facing },  // hp 14 (PATCH-V8 §3)
         ]});
         const s1 = act(s, 0, 0, { attack: { kind: 'basic', target: { x: 3, y: 3 } } });
-        assertEq(unit(s1, 1).hp, 4, `facing ${facing}: rear Basic 2 + Backstab 2 = 4 (8 -> 4)`);
+        assertEq(unit(s1, 1).hp, 10, `facing ${facing}: rear Basic 2 + Backstab 2 = 4 (14 -> 10)`);
       }
     },
   },
@@ -432,10 +432,10 @@ module.exports = [
       for (const apos of [{ x: 3, y: 4 }, { x: 2, y: 3 }]) {
         const s = mkBattle({ units: [
           { form: 'Pantherebus', owner: 0, x: apos.x, y: apos.y },
-          { form: 'Bulwhark', owner: 1, x: 3, y: 3, facing: 'N' },  // rear is only the y=2 row
+          { form: 'Bulwhark', owner: 1, x: 3, y: 3, facing: 'N' },  // hp 14; rear is only the y=2 row
         ]});
         const s1 = act(s, 0, 0, { attack: { kind: 'basic', target: { x: 3, y: 3 } } });
-        assertEq(unit(s1, 1).hp, 6, `from ${apos.x},${apos.y}: plain Basic 2 (8 -> 6)`);
+        assertEq(unit(s1, 1).hp, 12, `from ${apos.x},${apos.y}: plain Basic 2 (14 -> 12)`);
       }
     },
   },
@@ -447,14 +447,14 @@ module.exports = [
     fn() {
       const s = mkBattle({ units: [
         { form: 'Bulwhark', owner: 0, x: 3, y: 3, pinnedTurn: 1 },  // playerTurns default [1,0]
-        { form: 'Butcherbeak', owner: 1, x: 3, y: 4 },  // hp 5
+        { form: 'Butcherbeak', owner: 1, x: 3, y: 4 },  // hp 9 (PATCH-V8 §3)
       ]});
       assert(GM.isPinned(s, 0), 'isPinned');
       assertEq(GM.reachable(s, 0).length, 0, 'pinned: no reachable squares');
       let s1 = GM.applyAction(s, 0, { t: 'activate', unitId: 0 });
       assertThrows(() => GM.applyAction(s1, 0, { t: 'move', path: [{ x: 2, y: 3 }] }), 'pinned move');
       s1 = GM.applyAction(s1, 0, { t: 'attack', kind: 'basic', target: { x: 3, y: 4 } });
-      assertEq(unit(s1, 1).hp, 3, 'pinned unit still attacks: Basic 2 (5 -> 3)');
+      assertEq(unit(s1, 1).hp, 7, 'pinned unit still attacks: Basic 2 (9 -> 7)');
     },
   },
 
@@ -463,13 +463,13 @@ module.exports = [
     fn() {
       const s = mkBattle({ units: [
         { form: 'Peregale', owner: 0, x: 3, y: 3, rootedTurn: 1 },
-        { form: 'Maulberg', owner: 1, x: 3, y: 4 },  // hp 8; Flying doubles Grass only
+        { form: 'Maulberg', owner: 1, x: 3, y: 4 },  // hp 13 (PATCH-V8 §3); Flying doubles Grass only
       ]});
       assertEq(GM.reachable(s, 0).length, 0, 'rooted: no reachable squares');
       let s1 = GM.applyAction(s, 0, { t: 'activate', unitId: 0 });
       assertThrows(() => GM.applyAction(s1, 0, { t: 'move', path: [{ x: 4, y: 3 }] }), 'rooted move');
       s1 = GM.applyAction(s1, 0, { t: 'attack', kind: 'basic', target: { x: 3, y: 4 } });
-      assertEq(unit(s1, 1).hp, 6, 'rooted unit still attacks: Basic 2 (8 -> 6)');
+      assertEq(unit(s1, 1).hp, 11, 'rooted unit still attacks: Basic 2 (13 -> 11)');
     },
   },
 

@@ -1,5 +1,7 @@
 // Pattern geometry + focus tests. Expected values derived ONLY from SPEC.md §3/§6/§7
 // and CONTRACT.md (DEV-PINS cited inline) — engine.js was NOT consulted.
+// PATCH-V8: max HP per stage comes from data.js (PATCH-V8 §3 — authoritative);
+// damage numbers are unchanged. HP figures below recomputed accordingly.
 //
 // Damage references (SPEC §6):
 //   Stormbolt (Fulgurlynx, Electric)  Single 3, 4 dmg, Pin
@@ -33,7 +35,7 @@ module.exports = [
   {
     name: 'Single: projectile stops at FIRST enemy within R — Stormbolt 4 dmg, enemy behind it shielded (SPEC §3)',
     fn() {
-      // Fulgurlynx(Electric) at (3,3); Stonehide(Ground, 5hp) at (3,5) and (3,6).
+      // Fulgurlynx(Electric) at (3,3); Stonehide(Ground, 8hp) at (3,5) and (3,6).
       // Ray N: (3,4) empty, (3,5) first unit = enemy → hit. Electric does not beat Ground → 4 dmg.
       const st = mkBattle({ units: [
         { form: 'Fulgurlynx', owner: 0, x: 3, y: 3 },
@@ -41,8 +43,8 @@ module.exports = [
         { form: 'Stonehide', owner: 1, x: 3, y: 6 },
       ]});
       const s = act(st, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
-      assertEq(unit(s, 1).hp, 1, 'first enemy takes 4 (5→1)');
-      assertEq(unit(s, 2).hp, 5, 'enemy behind the first unit is shielded');
+      assertEq(unit(s, 1).hp, 4, 'first enemy takes 4 (8→4)');
+      assertEq(unit(s, 2).hp, 8, 'enemy behind the first unit is shielded');
       assertEq(unit(s, 1).pinnedTurn, 1, 'Stormbolt Pin: pinnedTurn = playerTurns[1]+1 = 1');
       assertEq(unit(s, 2).pinnedTurn, 0, 'shielded enemy not pinned');
     },
@@ -57,7 +59,7 @@ module.exports = [
         { form: 'Stonehide', owner: 1, x: 5, y: 5 },
       ]});
       const s = act(st, 0, 0, { attack: { kind: 'special', dir: { dx: 1, dy: 1 } } });
-      assertEq(unit(s, 1).hp, 1, 'diagonal target takes 4 (5→1)');
+      assertEq(unit(s, 1).hp, 4, 'diagonal target takes 4 (8→4)');
       assertEq(unit(s, 1).pinnedTurn, 1, 'pinned');
     },
   },
@@ -109,17 +111,17 @@ module.exports = [
     fn() {
       const a = mkBattle({ units: [
         { form: 'Fulgurlynx', owner: 0, x: 3, y: 3 },
-        { form: 'Galewyrm', owner: 1, x: 3, y: 4 },   // Flying, 6hp
+        { form: 'Galewyrm', owner: 1, x: 3, y: 4 },   // Flying, 7hp
       ]});
       const sa = act(a, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
-      assert(unit(sa, 1).pos === null, 'Galewyrm: 4×2=8 ≥ 6hp → KO, pos null');
+      assert(unit(sa, 1).pos === null, 'Galewyrm: 4×2=8 ≥ 7hp → KO, pos null');
 
       const b = mkBattle({ units: [
         { form: 'Fulgurlynx', owner: 0, x: 3, y: 3 },
-        { form: 'Stonehide', owner: 1, x: 3, y: 4 },  // Ground, 5hp — not doubled
+        { form: 'Stonehide', owner: 1, x: 3, y: 4 },  // Ground, 8hp — not doubled
       ]});
       const sb = act(b, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
-      assertEq(unit(sb, 1).hp, 1, 'Stonehide takes plain 4 (5→1)');
+      assertEq(unit(sb, 1).hp, 4, 'Stonehide takes plain 4 (8→4)');
     },
   },
 
@@ -138,10 +140,10 @@ module.exports = [
         { form: 'Hootle', owner: 1, x: 3, y: 7 },
       ]});
       const s = act(st, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
-      assertEq(unit(s, 1).hp, 1, '1st enemy 4→1 (pierce does not stop)');
-      assertEq(unit(s, 2).hp, 1, '2nd enemy 4→1');
-      assertEq(unit(s, 3).hp, 1, '3rd enemy 4→1');
-      assertEq(unit(s, 4).hp, 4, 'square 4 is beyond R3 — untouched');
+      assertEq(unit(s, 1).hp, 2, '1st enemy 5→2 (pierce does not stop)');
+      assertEq(unit(s, 2).hp, 2, '2nd enemy 5→2');
+      assertEq(unit(s, 3).hp, 2, '3rd enemy 5→2');
+      assertEq(unit(s, 4).hp, 5, 'square 4 is beyond R3 — untouched');
     },
   },
 
@@ -156,13 +158,13 @@ module.exports = [
         { form: 'Snapling', owner: 1, x: 3, y: 6 },
       ]});
       const s = act(st, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
-      assertEq(unit(s, 1).hp, 4, 'ally on lance path takes 0');
+      assertEq(unit(s, 1).hp, 5, 'ally on lance path takes 0');
       assert(unit(s, 1).burn === null, 'ally gets no Burn (friendly fire off)');
-      assertEq(unit(s, 2).hp, 1, 'enemy beyond ally takes 3 (4→1)');
-      assertEq(unit(s, 3).hp, 1, 'second enemy takes 3 (4→1)');
+      assertEq(unit(s, 2).hp, 2, 'enemy beyond ally takes 3 (5→2)');
+      assertEq(unit(s, 3).hp, 2, 'second enemy takes 3 (5→2)');
       assert(unit(s, 2).burn && unit(s, 2).burn.n === 2 && unit(s, 2).burn.ticks === 2, 'Burn 2 / 2 ticks on enemy 1');
       assert(unit(s, 3).burn && unit(s, 3).burn.n === 2 && unit(s, 3).burn.ticks === 2, 'Burn 2 / 2 ticks on enemy 2');
-      assertEq(unit(s, 0).hp, 4, 'Recoil 2: Pyroclasm 6→4');
+      assertEq(unit(s, 0).hp, 7, 'Recoil 2: Pyroclasm 9→7');
       assertEq(unit(s, 0).dealt, 6, 'dealt credit 3+3 (DEV-PIN 8)');
     },
   },
@@ -190,11 +192,11 @@ module.exports = [
         { form: 'Snapling', owner: 1, x: 3, y: 6 },   // 3rd square — beyond R2
       ]});
       const s = act(st, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
-      assertEq(unit(s, 1).hp, 3, 'square 1: 1 dmg (4→3)');
-      assertEq(unit(s, 2).hp, 3, 'square 2: 1 dmg (4→3)');
+      assertEq(unit(s, 1).hp, 4, 'square 1: 1 dmg (5→4)');
+      assertEq(unit(s, 2).hp, 4, 'square 2: 1 dmg (5→4)');
       assertEq(unit(s, 1).poison, 1, 'Poison stack on hit 1');
       assertEq(unit(s, 2).poison, 1, 'Poison stack on hit 2');
-      assertEq(unit(s, 3).hp, 4, 'beyond R2: untouched');
+      assertEq(unit(s, 3).hp, 5, 'beyond R2: untouched');
       assertEq(unit(s, 3).poison, 0, 'beyond R2: no poison');
     },
   },
@@ -206,15 +208,15 @@ module.exports = [
       // → exactly 1 eligible → auto-focus, no focus field needed.
       const st = mkBattle({ units: [
         { form: 'Grovewarden', owner: 0, x: 3, y: 3 },
-        { form: 'Snapling', owner: 1, x: 3, y: 4 },   // first hit: 3×2=6 ≥ 4hp → KO
+        { form: 'Snapling', owner: 1, x: 3, y: 4 },   // first hit: 3×2=6 ≥ 5hp → KO
         { form: 'Snapling', owner: 1, x: 3, y: 5 },   // second hit: plain 3
       ]});
       const p = previewMid(st, 0, 0, { t: 'attack', kind: 'special', dir: { dx: 0, dy: 1 } });
       assert(!p.needsFocus, 'one eligible → auto-resolve, needsFocus false');
       assertEq([...p.focusEligible].sort((a, b) => a - b), [1], 'only the first-hit unit is eligible');
       const s = act(st, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
-      assert(unit(s, 1).pos === null, 'first hit doubled: 6 ≥ 4hp → KO');
-      assertEq(unit(s, 2).hp, 1, 'second hit NOT doubled: 4−3=1');
+      assert(unit(s, 1).pos === null, 'first hit doubled: 6 ≥ 5hp → KO');
+      assertEq(unit(s, 2).hp, 2, 'second hit NOT doubled: 5−3=2');
     },
   },
 
@@ -236,11 +238,11 @@ module.exports = [
       ]});
       const s = act(st, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
       for (const id of [1, 2, 3, 4]) {
-        assertEq(unit(s, id).hp, 1, `cone square unit ${id} takes 3 (4→1)`);
+        assertEq(unit(s, id).hp, 2, `cone square unit ${id} takes 3 (5→2)`);
         assertEq(unit(s, id).chill, 1, `cone square unit ${id} gains Chill 1`);
       }
-      assertEq(unit(s, 5).hp, 4, '(2,4) diagonal-adjacent is NOT in the cone');
-      assertEq(unit(s, 6).hp, 4, '(3,6) third row is NOT in the cone');
+      assertEq(unit(s, 5).hp, 5, '(2,4) diagonal-adjacent is NOT in the cone');
+      assertEq(unit(s, 6).hp, 5, '(3,6) third row is NOT in the cone');
       assertEq(unit(s, 5).chill, 0, 'no chill outside the cone');
       assertEq(unit(s, 6).chill, 0, 'no chill outside the cone');
     },
@@ -259,10 +261,10 @@ module.exports = [
         { form: 'Sootpup', owner: 0, x: 3, y: 1 },
       ]});
       const s = act(st, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: -1 } } });
-      assertEq(unit(s, 1).hp, 1, 'near enemy takes 3 (4→1) despite attacker facing N');
+      assertEq(unit(s, 1).hp, 2, 'near enemy takes 3 (5→2) despite attacker facing N');
       assert(unit(s, 1).pos.x === 3 && unit(s, 1).pos.y === 2, 'push cancelled — destination occupied');
       assert(unit(s, 1).burn && unit(s, 1).burn.n === 1 && unit(s, 1).burn.ticks === 2, 'Burn 1 / 2 ticks on near-square enemy');
-      assertEq(unit(s, 2).hp, 4, 'ally on cone square takes 0');
+      assertEq(unit(s, 2).hp, 5, 'ally on cone square takes 0');
       assert(unit(s, 2).burn === null, 'ally never burned');
       assertEq(unit(s, 0).facing, 'N', 'attacking does not change facing');
     },
@@ -279,9 +281,9 @@ module.exports = [
         { form: 'Snapling', owner: 1, x: 2, y: 5 },   // outside the truncated cone
       ]});
       const s = act(st, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
-      assertEq(unit(s, 1).hp, 1, 'near square hit (4→1)');
-      assertEq(unit(s, 2).hp, 1, 'on-board beyond square hit (4→1)');
-      assertEq(unit(s, 3).hp, 4, '(2,5) is not a cone square');
+      assertEq(unit(s, 1).hp, 2, 'near square hit (5→2)');
+      assertEq(unit(s, 2).hp, 2, 'on-board beyond square hit (5→2)');
+      assertEq(unit(s, 3).hp, 5, '(2,5) is not a cone square');
     },
   },
 
@@ -302,7 +304,7 @@ module.exports = [
   {
     name: 'Cone focus: 2 eligible enemies → needsFocus true, missing focus rejected, chosen focus doubled exactly once (Glacial Gore vs 2 Flying)',
     fn() {
-      // Ice beats Flying. Wyrmlets (4hp) on (3,4) and (2,5) — both in cone N from (3,3).
+      // Ice beats Flying. Wyrmlets (5hp) on (3,4) and (2,5) — both in cone N from (3,3).
       const st = mkBattle({ units: [
         { form: 'Gravewinter', owner: 0, x: 3, y: 3 },
         { form: 'Wyrmlet', owner: 1, x: 3, y: 4 },
@@ -315,8 +317,8 @@ module.exports = [
       assertThrows(() => GM.applyAction(s1, 0, { t: 'attack', kind: 'special', dir: { dx: 0, dy: 1 } }),
         'omitting focus with ≥2 eligible must throw');
       const s2 = GM.applyAction(s1, 0, { t: 'attack', kind: 'special', dir: { dx: 0, dy: 1 }, focus: 1 });
-      assert(unit(s2, 1).pos === null, 'focus unit doubled: 3×2=6 ≥ 4hp → KO');
-      assertEq(unit(s2, 2).hp, 1, 'other hit unit takes plain 3 (4→1) — at most ONE unit doubled');
+      assert(unit(s2, 1).pos === null, 'focus unit doubled: 3×2=6 ≥ 5hp → KO');
+      assertEq(unit(s2, 2).hp, 2, 'other hit unit takes plain 3 (5→2) — at most ONE unit doubled');
     },
   },
 
@@ -333,8 +335,8 @@ module.exports = [
         { form: 'Gritling', owner: 1, x: 3, y: 5 },   // 2 away — not hit
       ]});
       const s = act(st, 0, 0, { attack: { kind: 'special' } });
-      for (let id = 1; id <= 8; id++) assertEq(unit(s, id).hp, 2, `adjacent enemy ${id} takes 2 (4→2)`);
-      assertEq(unit(s, 9).hp, 4, 'non-adjacent enemy untouched');
+      for (let id = 1; id <= 8; id++) assertEq(unit(s, id).hp, 3, `adjacent enemy ${id} takes 2 (5→3)`);
+      assertEq(unit(s, 9).hp, 5, 'non-adjacent enemy untouched');
     },
   },
 
@@ -351,12 +353,12 @@ module.exports = [
         { form: 'Mosskit', owner: 1, x: 3, y: 2 },
       ]});
       const s = act(st, 0, 0, { attack: { kind: 'special' } });
-      assertEq(unit(s, 3).hp, 1, 'enemy E takes 3 (4→1)');
-      assertEq(unit(s, 4).hp, 1, 'enemy S takes 3 (4→1)');
+      assertEq(unit(s, 3).hp, 2, 'enemy E takes 3 (5→2)');
+      assertEq(unit(s, 4).hp, 2, 'enemy S takes 3 (5→2)');
       assert(unit(s, 3).pos.x === 5 && unit(s, 3).pos.y === 3, 'enemy E pushed to (5,3)');
       assert(unit(s, 4).pos.x === 3 && unit(s, 4).pos.y === 1, 'enemy S pushed to (3,1)');
-      assertEq(unit(s, 1).hp, 3, 'ally W untouched');
-      assertEq(unit(s, 2).hp, 3, 'ally N untouched');
+      assertEq(unit(s, 1).hp, 4, 'ally W untouched');
+      assertEq(unit(s, 2).hp, 4, 'ally N untouched');
       assert(unit(s, 1).pos.x === 2 && unit(s, 1).pos.y === 3, 'ally W not pushed');
       assert(unit(s, 2).pos.x === 3 && unit(s, 2).pos.y === 4, 'ally N not pushed');
     },
@@ -390,10 +392,10 @@ module.exports = [
         { form: 'Wyrmlet', owner: 1, x: 4, y: 6 },   // NOT in the plus
       ]});
       const s = act(st, 0, 0, { attack: { kind: 'special', target: { x: 3, y: 5 } } });
-      assertEq(unit(s, 1).hp, 2, 'center takes 2 (4→2)');
-      assertEq(unit(s, 2).hp, 2, 'west arm takes 2 (4→2)');
-      assertEq(unit(s, 3).hp, 2, 'north arm takes 2 (4→2)');
-      assertEq(unit(s, 4).hp, 4, 'diagonal of center is NOT hit');
+      assertEq(unit(s, 1).hp, 3, 'center takes 2 (5→3)');
+      assertEq(unit(s, 2).hp, 3, 'west arm takes 2 (5→3)');
+      assertEq(unit(s, 3).hp, 3, 'north arm takes 2 (5→3)');
+      assertEq(unit(s, 4).hp, 5, 'diagonal of center is NOT hit');
       assertEq(unit(s, 1).pinnedTurn, 1, 'center unit pinned (pinnedTurn = 1)');
       assertEq(unit(s, 2).pinnedTurn, 0, 'arm unit NOT pinned (center-only)');
       assertEq(unit(s, 3).pinnedTurn, 0, 'arm unit NOT pinned (center-only)');
@@ -410,9 +412,9 @@ module.exports = [
         { form: 'Wyrmlet', owner: 1, x: 3, y: 5 },
       ]});
       const s = act(st, 0, 0, { attack: { kind: 'special', target: { x: 3, y: 5 } } });
-      assertEq(unit(s, 2).hp, 2, 'enemy at center takes 2 despite the intervening ally');
+      assertEq(unit(s, 2).hp, 3, 'enemy at center takes 2 despite the intervening ally');
       assertEq(unit(s, 2).pinnedTurn, 1, 'center pinned');
-      assertEq(unit(s, 1).hp, 4, 'ally on plus square takes 0');
+      assertEq(unit(s, 1).hp, 5, 'ally on plus square takes 0');
       assertEq(unit(s, 1).pinnedTurn, 0, 'ally never pinned');
     },
   },
@@ -444,8 +446,8 @@ module.exports = [
         { form: 'Hootle', owner: 1, x: 5, y: 4 },
       ]});
       const s = act(st, 0, 0, { attack: { kind: 'special', target: { x: 5, y: 5 } } });
-      assertEq(unit(s, 1).hp, 2, 'diagonal center takes 2 (4→2)');
-      assertEq(unit(s, 2).hp, 2, 'south arm takes 2 (4→2)');
+      assertEq(unit(s, 1).hp, 3, 'diagonal center takes 2 (5→3)');
+      assertEq(unit(s, 2).hp, 3, 'south arm takes 2 (5→3)');
       assertEq(unit(s, 1).pinnedTurn, 1, 'center pinned');
       assertEq(unit(s, 2).pinnedTurn, 0, 'arm not pinned');
     },
@@ -465,9 +467,9 @@ module.exports = [
         { form: 'Hootle', owner: 1, x: 2, y: 2 },
       ]});
       const s = act(st, 0, 0, { attack: { kind: 'special', squares: [{ x: 3, y: 5 }, { x: 4, y: 4 }, { x: 2, y: 2 }] } });
-      assertEq(unit(s, 1).hp, 2, '(3,5) takes 2 (4→2)');
-      assertEq(unit(s, 2).hp, 2, '(4,4) takes 2 (4→2)');
-      assertEq(unit(s, 3).hp, 2, '(2,2) takes 2 (4→2)');
+      assertEq(unit(s, 1).hp, 3, '(3,5) takes 2 (5→3)');
+      assertEq(unit(s, 2).hp, 3, '(4,4) takes 2 (5→3)');
+      assertEq(unit(s, 3).hp, 3, '(2,2) takes 2 (5→3)');
     },
   },
 
@@ -494,7 +496,7 @@ module.exports = [
       assertThrows(() => act(st, 0, 0, { attack: { kind: 'special', squares: [{ x: 5, y: 5 }] } }),
         'Manhattan 4 square must be rejected even though Chebyshev is 2');
       const s = act(st, 0, 0, { attack: { kind: 'special', squares: [{ x: 4, y: 4 }] } });
-      assertEq(unit(s, 2).hp, 2, 'Manhattan-2 diagonal square is legal: 2 dmg (4→2)');
+      assertEq(unit(s, 2).hp, 3, 'Manhattan-2 diagonal square is legal: 2 dmg (5→3)');
     },
   },
 
@@ -523,8 +525,8 @@ module.exports = [
         { form: 'Gritling', owner: 1, x: 4, y: 3 },   // enemy
       ]});
       const s = act(st, 0, 0, { attack: { kind: 'special', squares: [{ x: 2, y: 3 }, { x: 4, y: 3 }] } });
-      assertEq(unit(s, 1).hp, 4, 'ally on chosen square takes 0');
-      assertEq(unit(s, 2).hp, 2, 'enemy takes 2 (4→2)');
+      assertEq(unit(s, 1).hp, 5, 'ally on chosen square takes 0');
+      assertEq(unit(s, 2).hp, 3, 'enemy takes 2 (5→3)');
       assertThrows(() => act(st, 0, 0, { attack: { kind: 'special', squares: [{ x: 2, y: 3 }] } }),
         'scatter hitting only an ally must throw (no enemy hit)');
     },
@@ -546,7 +548,7 @@ module.exports = [
       ]});
       const s = act(st, 0, 0, { attack: { kind: 'special', targetUnit: 3, relocateTo: { x: 6, y: 4 } } });
       assert(unit(s, 3).pos.x === 6 && unit(s, 3).pos.y === 4, 'victim relocated to (6,4)');
-      assertEq(unit(s, 3).hp, 3, 'Telesmash 1st grab = 1 dmg (4→3)');
+      assertEq(unit(s, 3).hp, 4, 'Telesmash 1st grab = 1 dmg (5→4)');
       assertEq(unit(s, 3).telegrabs, 1, 'lifetime grab counter = 1');
     },
   },
@@ -576,7 +578,7 @@ module.exports = [
       ]});
       const s = act(st, 0, 0, { attack: { kind: 'special', targetUnit: 1, relocateTo: null } });
       assert(unit(s, 1).pos.x === 5 && unit(s, 1).pos.y === 5, 'relocateTo null → victim stays put');
-      assertEq(unit(s, 1).hp, 4, 'weakened grab deals 0 damage');
+      assertEq(unit(s, 1).hp, 5, 'weakened grab deals 0 damage');
       assertEq(unit(s, 1).telegrabs, 1, 'lifetime counter increments anyway');
       assertThrows(() => act(st, 0, 0, { attack: { kind: 'special', targetUnit: 1, relocateTo: { x: 5, y: 3 } } }),
         'relocation Chebyshev 2 > relocate 1 must throw');
@@ -588,21 +590,21 @@ module.exports = [
   // ───────────────────────── Basic ─────────────────────────
 
   {
-    name: 'Basic: 2 dmg, doubled iff attacker type beats target — Fire Basic KOs a 4hp Grass; deals plain 2 to Water via diagonal adjacency (§7)',
+    name: 'Basic: 2 dmg, doubled iff attacker type beats target — Fire Basic deals 4 to a Grass (5→1); plain 2 to Water via diagonal adjacency (§7)',
     fn() {
       const a = mkBattle({ units: [
         { form: 'Cinderling', owner: 0, x: 3, y: 3 },
-        { form: 'Mosskit', owner: 1, x: 3, y: 4 },    // Grass: 2×2=4 = 4hp → KO
+        { form: 'Mosskit', owner: 1, x: 3, y: 4 },    // Grass: 2×2=4 → 5→1 (plain 2 would leave 3)
       ]});
       const sa = act(a, 0, 0, { attack: { kind: 'basic', target: { x: 3, y: 4 } } });
-      assert(unit(sa, 1).pos === null, 'Fire basic vs Grass: 4 dmg KOs the 4hp Mosskit');
+      assertEq(unit(sa, 1).hp, 1, 'Fire basic vs Grass doubled: 2×2=4 (5→1)');
 
       const b = mkBattle({ units: [
         { form: 'Cinderling', owner: 0, x: 3, y: 3 },
         { form: 'Snapling', owner: 1, x: 4, y: 4 },   // diagonal-adjacent Water
       ]});
       const sb = act(b, 0, 0, { attack: { kind: 'basic', target: { x: 4, y: 4 } } });
-      assertEq(unit(sb, 1).hp, 2, 'Fire basic vs Water: plain 2 (4→2), diagonal target legal');
+      assertEq(unit(sb, 1).hp, 3, 'Fire basic vs Water: plain 2 (5→3), diagonal target legal');
     },
   },
 
@@ -631,14 +633,14 @@ module.exports = [
         { form: 'Snapling', owner: 1, x: 3, y: 4 },   // Water vs Water — no doubling
       ]});
       const sa = act(a, 0, 0, { attack: { kind: 'basic', target: { x: 3, y: 4 } } });
-      assertEq(unit(sa, 1).hp, 3, 'Guppling basic = 1 (4→3)');
+      assertEq(unit(sa, 1).hp, 4, 'Guppling basic = 1 (5→4)');
 
       const b = mkBattle({ units: [
         { form: 'Leviadon', owner: 0, x: 3, y: 3 },
         { form: 'Wyrmlet', owner: 1, x: 3, y: 4 },    // Water vs Flying — no doubling
       ]});
       const sb = act(b, 0, 0, { attack: { kind: 'basic', target: { x: 3, y: 4 } } });
-      assertEq(unit(sb, 1).hp, 2, 'Leviadon basic = 2 (4→2)');
+      assertEq(unit(sb, 1).hp, 3, 'Leviadon basic = 2 (5→3)');
     },
   },
 
@@ -660,8 +662,8 @@ module.exports = [
       assertThrows(() => GM.applyAction(s1, 0, { t: 'attack', kind: 'special' }),
         'missing focus with 2 eligible must throw');
       const s2 = GM.applyAction(s1, 0, { t: 'attack', kind: 'special', focus: 1 });
-      assert(unit(s2, 1).pos === null, 'focused Snapling: 2×2=4 = 4hp → KO');
-      assertEq(unit(s2, 2).hp, 2, 'unfocused Snapling takes base 2 (4→2) — only ONE unit doubled');
+      assertEq(unit(s2, 1).hp, 1, 'focused Snapling doubled: 2×2=4 (5→1)');
+      assertEq(unit(s2, 2).hp, 3, 'unfocused Snapling takes base 2 (5→3) — only ONE unit doubled');
     },
   },
 
@@ -678,8 +680,8 @@ module.exports = [
       assert(!p.needsFocus, 'single eligible hit → auto-resolve');
       assertEq([...p.focusEligible].sort((a, b) => a - b), [1], 'only the Water unit is eligible');
       const s = act(st, 0, 0, { attack: { kind: 'special' } });
-      assert(unit(s, 1).pos === null, 'Snapling auto-doubled: 4 dmg = 4hp → KO');
-      assertEq(unit(s, 2).hp, 2, 'Gritling takes base 2 (4→2)');
+      assertEq(unit(s, 1).hp, 1, 'Snapling auto-doubled: 2×2=4 (5→1)');
+      assertEq(unit(s, 2).hp, 3, 'Gritling takes base 2 (5→3)');
     },
   },
 

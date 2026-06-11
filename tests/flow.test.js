@@ -1,6 +1,9 @@
 // flow.test.js — game flow: Draft, Placement, Activations, Evolution, Win.
-// INDEPENDENCE: every expected value below is derived from SPEC.md + CONTRACT.md
-// only (engine.js never consulted). Spec citations live in test names/comments.
+// INDEPENDENCE: every expected value below is derived from PATCH-V8.md + SPEC.md
+// + CONTRACT.md + data.js (HP authority) only (engine.js never consulted).
+// Spec citations live in test names/comments.
+// v8: stage max HP per PATCH-V8 §3 (data.js authoritative); evolution refresh is
+// heal ceil(missing/2) vs the NEW stage's max, capped (PATCH-V8 §4).
 const { GM, DATA, assert, assertEq, assertThrows, mkBattle, play, act, endTurn, unit, at } = require('./helpers.js');
 
 const tests = [];
@@ -155,9 +158,9 @@ test('placement: both confirm → battle with 12 base-form units at base HP, P0\
     const line = DATA.lines.find(l => l.id === u.lineId);
     assertEq(u.hp, line.stages[0].hp, `unit ${u.id} (${u.lineId}) enters at base HP`);
   }
-  // the two non-4 base HPs per SPEC §6: Guppling 3, Zapkitt 3
-  assertEq(at(s, 2, 0).hp, 3, 'Guppling base HP 3');
-  assertEq(at(s, 3, 0).hp, 3, 'Zapkitt base HP 3');
+  // the two non-5 base HPs per PATCH-V8 §3 ("Bases: all 5, except Guppling 4 and Zapkitt 4")
+  assertEq(at(s, 2, 0).hp, 4, 'Guppling base HP 4');
+  assertEq(at(s, 3, 0).hp, 4, 'Zapkitt base HP 4');
 });
 
 // ---------------------------------------------------------------------------
@@ -201,7 +204,7 @@ test('activations: free order (DEV-PIN 24 owner amendment) — attack then move 
   ] });
   s = GM.applyAction(s, 0, { t: 'activate', unitId: 0 });
   s = GM.applyAction(s, 0, { t: 'attack', kind: 'basic', target: { x: 3, y: 4 } });
-  assertEq(unit(s, 1).hp, 2, 'basic 2; Electric does not beat Grass (SPEC §7) so no ×2');
+  assertEq(unit(s, 1).hp, 3, 'basic 2 off Mosskit\'s 5 (PATCH-V8 §3); Electric does not beat Grass (SPEC §7) so no ×2');
   s = GM.applyAction(s, 0, { t: 'move', path: [{ x: 2, y: 3 }] });
   assertEq(unit(s, 0).pos, { x: 2, y: 3 }, 'attack-then-move is legal (DEV-PIN 24)');
   assertEq(unit(s, 0).facing, 'W', 'post-attack move still sets facing from final step');
@@ -217,7 +220,7 @@ test('activations: move then attack still works under free order (DEV-PIN 24)', 
   s = GM.applyAction(s, 0, { t: 'activate', unitId: 0 });
   s = GM.applyAction(s, 0, { t: 'move', path: [{ x: 3, y: 3 }] });
   s = GM.applyAction(s, 0, { t: 'attack', kind: 'basic', target: { x: 3, y: 4 } });
-  assertEq(unit(s, 1).hp, 2, 'move-then-attack unchanged');
+  assertEq(unit(s, 1).hp, 3, 'move-then-attack unchanged: basic 2 off Mosskit\'s 5');
 });
 
 test('activations: actions from the non-active player throw; activating an enemy unit throws (SPEC §1, CONTRACT)', () => {
@@ -241,10 +244,10 @@ test('evolution: "survived" counts own turns completed (increments at end of own
   assertEq(unit(s, 0).stage, 0, 'no evolution during the opponent\'s turn');
   s = endTurn(s, 1); // start of P0's next turn: step 1 evolution
   assertEq(unit(s, 0).stage, 1, 'survived 2 ≥ 2 → Shellbrook, and only ONE stage (survived 5 not met)');
-  assertEq(unit(s, 0).hp, 5, '4 +2 refresh capped at new max 5');
+  assertEq(unit(s, 0).hp, 7, 'v8 refresh heals ceil(missing/2) vs NEW max 8: 5 + ceil((8−5)/2)=2 → 7/8 (PATCH-V8 §4)');
 });
 
-test('evolution: damaged middle does not full-heal — Shellbrook 2hp survived 5 → Bulwhark at 4/8; new Special live immediately: Tidal Ram 3 ×2 (Water>Ground) KOs 4hp Gritling (SPEC §4 steps 1-3)', () => {
+test('evolution: damaged middle does not full-heal — Shellbrook 2/8 survived 5 → Bulwhark at 2+ceil((14−2)/2)=8/14 (PATCH-V8 §4 example); new Special live immediately: Tidal Ram 3 ×2 (Water>Ground) KOs 5hp Gritling (SPEC §4 steps 1-3)', () => {
   let s = mkBattle({ turn: 1, units: [
     { form: 'Shellbrook', owner: 0, x: 3, y: 3, hp: 2, survived: 5 },
     { form: 'Gritling', owner: 1, x: 3, y: 5 },
@@ -252,11 +255,11 @@ test('evolution: damaged middle does not full-heal — Shellbrook 2hp survived 5
   ] });
   s = endTurn(s, 1); // start of P0's turn → evolve
   assertEq(unit(s, 0).stage, 2, 'survived 5 ≥ 5 → Bulwhark');
-  assertEq(unit(s, 0).hp, 4, '2 +2 = 4, capped refresh is NOT a full heal to 8');
-  // Tidal Ram (Single 3, 3 dmg): first unit N within 3 is the enemy Gritling at (3,5); ×2 = 6 ≥ 4hp
+  assertEq(unit(s, 0).hp, 8, 'heal ceil(missing/2) vs NEW max: 2 + ceil((14−2)/2)=6 → 8, NOT a full heal to 14 (PATCH-V8 §4)');
+  // Tidal Ram (Single 3, 3 dmg): first unit N within 3 is the enemy Gritling at (3,5); ×2 = 6 ≥ 5hp
   s = act(s, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
   assertEq(unit(s, 1).pos, null, 'new-stage Special usable the same turn');
-  assertEq(unit(s, 0).dealt, 4, 'dealt = actual HP removed, capped at remaining 4 not 6 (DEV-PIN 8)');
+  assertEq(unit(s, 0).dealt, 5, 'dealt = actual HP removed, capped at remaining 5 not 6 (DEV-PIN 8)');
 });
 
 test('evolution: "dealt" includes the ×2 but caps at HP removed — Cinderling basic 2 ×2 (Fire>Grass) vs 3hp Mosskit credits 3; dealt 3 → Flarewyrm next own turn start (SPEC §4, §7, DEV-PIN 8)', () => {
@@ -273,19 +276,21 @@ test('evolution: "dealt" includes the ×2 but caps at HP removed — Cinderling 
   assertEq(unit(s, 0).stage, 0, 'still base during opponent\'s turn');
   s = endTurn(s, 1);
   assertEq(unit(s, 0).stage, 1, 'dealt 3 ≥ 3 → Flarewyrm at start of own turn');
-  assertEq(unit(s, 0).hp, 5, '4 +2 capped at 5');
+  assertEq(unit(s, 0).hp, 6, 'undamaged 5/5 → Flarewyrm 6: heal ceil((6−5)/2)=1 → 6/6 (PATCH-V8 §4)');
 });
 
 test('evolution credit: Magma Stream — 3 lance dmg credits attacker; Burn 2 tick at victim\'s turn start credits the burner (capped, KO credited); Recoil 2 credits no one (SPEC §3 attribution, DEV-PIN 8)', () => {
   let s = mkBattle({ units: [
     { form: 'Pyroclasm', owner: 0, x: 3, y: 3 },
-    { form: 'Snapling', owner: 1, x: 3, y: 4 }, // Water 4hp — Fire does not double vs Water
+    // hp 4 override (v8 default is 5) keeps the cap scenario: lance leaves 1hp so the
+    // 2-dmg burn tick must credit only 1. Water — Fire does not double vs Water.
+    { form: 'Snapling', owner: 1, x: 3, y: 4, hp: 4 },
     { form: 'Mosskit', owner: 1, x: 7, y: 7 },
   ] });
   s = act(s, 0, 0, { attack: { kind: 'special', dir: { dx: 0, dy: 1 } } });
   assertEq(unit(s, 1).hp, 1, 'lance 3, not super-effective');
   assert(unit(s, 1).burn && unit(s, 1).burn.n === 2 && unit(s, 1).burn.ticks === 2, 'Burn 2 with 2 ticks applied');
-  assertEq(unit(s, 0).hp, 4, 'Recoil 2 off Pyroclasm\'s 6');
+  assertEq(unit(s, 0).hp, 7, 'Recoil 2 off Pyroclasm\'s 9 (PATCH-V8 §3)');
   assertEq(unit(s, 0).dealt, 3, 'attack damage credited to attacker');
   assertEq(unit(s, 1).dealt, 0, 'recoil damage credits no one');
   s = endTurn(s, 0); // P1 turn start step 2: burn tick 2 vs 1hp → 1 credited, KO
@@ -301,14 +306,14 @@ test('evolution credit: aura damage credits no one — Local Storm deals 1 to ad
     { form: 'Mosskit', owner: 1, x: 4, y: 3 },
   ] });
   s = endTurn(s, 0, [{ unitId: 0 }]);
-  assertEq(unit(s, 1).hp, 3, 'adjacent ALLY takes 1 (friendly aura fire)');
-  assertEq(unit(s, 2).hp, 3, 'adjacent enemy takes 1');
-  assertEq(unit(s, 0).hp, 8, 'Tempestdrake itself is not within 1 of itself');
+  assertEq(unit(s, 1).hp, 4, 'adjacent ALLY takes 1 off Snapling\'s 5 (friendly aura fire)');
+  assertEq(unit(s, 2).hp, 4, 'adjacent enemy takes 1 off Mosskit\'s 5');
+  assertEq(unit(s, 0).hp, 13, 'Tempestdrake (13, PATCH-V8 §3) is not within 1 of itself');
   assertEq(unit(s, 0).dealt, 0, 'aura damage credits no one');
   assertEq(s.turn.player, 1, 'turn passed after the aura subphase');
 });
 
-test('evolution: KO condition — Sootpup KOs an enemy → Hellhowl next own turn start at 4+2=6 of 7 (capped, no full heal); new Speed 5 live immediately (SPEC §4, §6 line 2)', () => {
+test('evolution: KO condition — Sootpup KOs an enemy → Hellhowl next own turn start at 5+ceil((11−5)/2)=8 of 11 (no full heal, PATCH-V8 §4); new Speed 5 live immediately (SPEC §4, §6 line 2)', () => {
   let s = mkBattle({ units: [
     { form: 'Sootpup', owner: 0, x: 3, y: 3 },
     { form: 'Zapkitt', owner: 1, x: 3, y: 4, hp: 2 },
@@ -319,13 +324,13 @@ test('evolution: KO condition — Sootpup KOs an enemy → Hellhowl next own tur
   s = endTurn(s, 0);
   s = endTurn(s, 1);
   assertEq(unit(s, 0).stage, 1, 'KO condition → Hellhowl');
-  assertEq(unit(s, 0).hp, 6, '4 +2 = 6, NOT max 7');
+  assertEq(unit(s, 0).hp, 8, '5 + ceil((11−5)/2)=3 → 8, NOT max 11');
   // Hellhowl Speed 5 (base Sootpup was 2): a 5-step move is legal right now
   s = act(s, 0, 0, { path: [{ x: 3, y: 4 }, { x: 3, y: 5 }, { x: 3, y: 6 }, { x: 3, y: 7 }, { x: 2, y: 7 }] });
   assertEq(unit(s, 0).pos, { x: 2, y: 7 }, 'new Speed live the same turn');
 });
 
-test('evolution: allyKo condition — Cacklet sees an allied KO and becomes Ossiyena at the start of its controller\'s next turn, hp 4+2=6 (SPEC §4)', () => {
+test('evolution: allyKo condition — Cacklet sees an allied KO and becomes Ossiyena at the start of its controller\'s next turn, hp 5+ceil((10−5)/2)=8 (SPEC §4, PATCH-V8 §4)', () => {
   let s = mkBattle({ units: [
     { form: 'Zapkitt', owner: 0, x: 3, y: 3 },
     { form: 'Shadekit', owner: 1, x: 3, y: 4, hp: 2 },
@@ -336,17 +341,17 @@ test('evolution: allyKo condition — Cacklet sees an allied KO and becomes Ossi
   assertEq(unit(s, 2).allyKoSeen, true, 'ally KO recorded while Cacklet in play');
   s = endTurn(s, 0); // start of P1's turn: Cacklet evolves
   assertEq(unit(s, 2).stage, 1, 'allyKo → Ossiyena');
-  assertEq(unit(s, 2).hp, 6, '4 +2 capped at Ossiyena max 6');
+  assertEq(unit(s, 2).hp, 8, '5 + ceil((10−5)/2)=3 → 8 of Ossiyena max 10');
 });
 
-test('evolution: multi-stage lines evolve one stage per condition, repeating while met — Cinderling dealt 7 → Flarewyrm → Pyroclasm in one turn start, hp min(4+2,5)=5 then min(5+2,6)=6 (DEV-PIN 9)', () => {
+test('evolution: multi-stage lines evolve one stage per condition, repeating while met — Cinderling dealt 7 → Flarewyrm → Pyroclasm in one turn start, hp 5+ceil((6−5)/2)=6 then 6+ceil((9−6)/2)=8 (DEV-PIN 9, PATCH-V8 §4 per stage)', () => {
   let s = mkBattle({ turn: 1, units: [
     { form: 'Cinderling', owner: 0, x: 0, y: 0, dealt: 7 },
     { form: 'Mosskit', owner: 1, x: 7, y: 7 },
   ] });
   s = endTurn(s, 1); // start of P0's turn: dealt 7 satisfies both thresholds (3, then 7)
   assertEq(unit(s, 0).stage, 2, 'both stages, one at a time');
-  assertEq(unit(s, 0).hp, 6, 'two capped +2 refreshes: 4→5→6');
+  assertEq(unit(s, 0).hp, 8, 'two ceil(missing/2) refreshes, one per stage: 5→6/6→8/9');
 });
 
 test('evolution: Tavrik never evolves regardless of counters (SPEC §6 line 13: single stage, no evolution tracking)', () => {
@@ -356,7 +361,7 @@ test('evolution: Tavrik never evolves regardless of counters (SPEC §6 line 13: 
   ] });
   s = endTurn(s, 1);
   assertEq(unit(s, 0).stage, 0, 'still Tavrik');
-  assertEq(unit(s, 0).hp, 5);
+  assertEq(unit(s, 0).hp, 8, 'Tavrik max HP 8 (PATCH-V8 §3), untouched');
 });
 
 test('evolution: Pin and Burn markers persist through evolution — evolve first, then burn ticks 2; pin still blocks move but not attack (SPEC §4; §1 start-of-turn order 1-then-2)', () => {
@@ -365,16 +370,18 @@ test('evolution: Pin and Burn markers persist through evolution — evolve first
     { form: 'Snapling', owner: 0, x: 0, y: 0, survived: 2, burn: { n: 2, ticks: 2 }, pinnedTurn: 2 },
     { form: 'Mosskit', owner: 1, x: 1, y: 0 },
   ] });
-  s = endTurn(s, 1); // P0 turn start: (1) evolve 4→min(4+2,5)=5, then (2) burn tick −2 → 3
+  // P0 turn start: (1) evolve 5/5 → Shellbrook 8: heal ceil((8−5)/2)=2 → 7, then (2) burn tick −2 → 5.
+  // Order-discriminating: burn-first would leave 3, then heal ceil((8−3)/2)=3 → 6, not 5.
+  s = endTurn(s, 1);
   const u = unit(s, 0);
   assertEq(u.stage, 1, 'evolved to Shellbrook');
-  assertEq(u.hp, 3, 'refreshed to 5 BEFORE the 2-dmg burn tick (start-of-turn step order)');
+  assertEq(u.hp, 5, 'refreshed to 7 BEFORE the 2-dmg burn tick (start-of-turn step order; PATCH-V8 §4 math)');
   assert(u.burn && u.burn.n === 2 && u.burn.ticks === 1, 'burn survives evolution, one tick spent');
   assertEq(u.pinnedTurn, 2, 'pin survives evolution');
   let s2 = GM.applyAction(s, 0, { t: 'activate', unitId: 0 });
   assertThrows(() => GM.applyAction(s2, 0, { t: 'move', path: [{ x: 0, y: 1 }] }), 'pinned unit cannot move on its controller\'s turn');
   s2 = GM.applyAction(s2, 0, { t: 'attack', kind: 'basic', target: { x: 1, y: 0 } });
-  assertEq(unit(s2, 1).hp, 2, 'pinned unit may still attack: basic 2 (Water≠>Grass, no ×2)');
+  assertEq(unit(s2, 1).hp, 3, 'pinned unit may still attack: basic 2 off Mosskit\'s 5 (Water≠>Grass, no ×2)');
 });
 
 // ---------------------------------------------------------------------------
@@ -426,14 +433,14 @@ test('win simultaneity: one resolution wipes BOTH sides — Magma Stream 3 KOs t
   assertEq(s.phase, 'over');
 });
 
-test('win: recoil self-KO while the defender survives is a loss — Pyroclasm 2hp recoils out, Bulwhark lives at 8−3=5 → winner 1 (SPEC §3 Recoil can KO the attacker)', () => {
+test('win: recoil self-KO while the defender survives is a loss — Pyroclasm 2hp recoils out, Bulwhark lives at 14−3=11 → winner 1 (SPEC §3 Recoil can KO the attacker)', () => {
   let s = mkBattle({ units: [
     { form: 'Pyroclasm', owner: 0, x: 3, y: 3, hp: 2 }, // P0's last unit
-    { form: 'Bulwhark', owner: 1, x: 3, y: 4 },         // 8hp, survives the lance
+    { form: 'Bulwhark', owner: 1, x: 3, y: 4 },         // 14hp (PATCH-V8 §3), survives the lance
   ] });
   s = GM.applyAction(s, 0, { t: 'activate', unitId: 0 });
   s = GM.applyAction(s, 0, { t: 'attack', kind: 'special', dir: { dx: 0, dy: 1 } });
-  assertEq(unit(s, 1).hp, 5, 'lance 3, no ×2 (Fire does not beat Water)');
+  assertEq(unit(s, 1).hp, 11, 'lance 3, no ×2 (Fire does not beat Water)');
   assertEq(unit(s, 0).pos, null, 'recoil KOs the attacker');
   assertEq(s.winner, 1, 'side with units remaining wins — not simultaneity');
   assertEq(s.phase, 'over');

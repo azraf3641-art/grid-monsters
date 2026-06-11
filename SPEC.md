@@ -6,6 +6,12 @@
 > (supersedes §1 "(a) move (optional), (b) attack (optional)" and §3
 > "after moving"; see CONTRACT.md DEV-PIN 24). Original handoff text below
 > is otherwise unmodified.
+>
+> **PATCH-V8 (PM, 2026-06-10 — see PATCH-V8.md for the full text):** v7 → v8
+> "Playtest #8". Immediate-root/move-forfeit ruling; Butcherbeak gains Skulk
+> + Thorn-root; all 57 max-HP values replaced (PATCH-V8 §3 supersedes the §6
+> table's HP column); evolution refresh becomes heal-ceil(missing/2)-capped
+> (supersedes §4 "+2 current HP"). CONTRACT.md DEV-PINS 25–26.
 
 You are the Eng instance for this build. This prompt is fully self-contained: everything you need is in this document. Do not invent rules; where this spec pins a ruling, implement it exactly. If you hit genuine ambiguity not covered here, STOP and ask rather than assuming.
 

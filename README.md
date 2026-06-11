@@ -1,8 +1,9 @@
-# Grid Monsters — v7 digital beta
+# Grid Monsters — v8 digital beta
 
 A 2-player, turn-based tactics game on an 8×8 grid. Draft a team of six evolving
 monsters (exactly one tyrant each), place them, and eliminate the enemy team.
-Faithful digitization of tabletop Playtest #7 for human-vs-human beta testing.
+Faithful digitization of tabletop Playtest #8 for human-vs-human beta testing
+(v7 handoff in SPEC.md as amended by PATCH-V8.md).
 
 Plain HTML/CSS/JS, no build step. The only external dependency is
 [PeerJS](https://peerjs.com) (CDN) for remote play.

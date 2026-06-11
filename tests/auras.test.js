@@ -1,6 +1,8 @@
 // tests/auras.test.js — SPEC §5 auras + serialization.
 // INDEPENDENCE: all expected values derived from SPEC.md + CONTRACT.md only
 // (engine.js was never read). Damage math cited inline.
+// PATCH-V8: max-HP values are taken from data.js (authoritative per PATCH-V8 §3);
+// evolution refresh is heal ceil(missing/2) vs the NEW stage's max, capped (PATCH-V8 §4).
 //
 // d4 derivation (CONTRACT "RNG (Earthquake only)", mulberry32, roll = floor(value*4)+1):
 //   seed 42 → rolls 3(S), 2(E), 4(W)…; rng state after 1 roll = 1831565855, after 2 = 3663131668
@@ -40,31 +42,31 @@ tests.push({
   fn() {
     let s = mkBattle({
       units: [
-        { form: 'Tempestdrake', owner: 0, x: 3, y: 3 },           // 0, hp 8
-        { form: 'Shriket', owner: 0, x: 2, y: 2 },                // 1 ally adj (diag), hp 4
-        { form: 'Cacklet', owner: 0, x: 3, y: 4 },                // 2 ally adj (orth), hp 4
-        { form: 'Pupfloe', owner: 1, x: 4, y: 4 },                // 3 enemy adj, hp 4
-        { form: 'Floecub', owner: 1, x: 4, y: 3 },                // 4 enemy adj, hp 4
-        { form: 'Zapkitt', owner: 1, x: 2, y: 3 },                // 5 enemy adj, hp 3
+        { form: 'Tempestdrake', owner: 0, x: 3, y: 3 },           // 0, hp 13
+        { form: 'Shriket', owner: 0, x: 2, y: 2 },                // 1 ally adj (diag), hp 5
+        { form: 'Cacklet', owner: 0, x: 3, y: 4 },                // 2 ally adj (orth), hp 5
+        { form: 'Pupfloe', owner: 1, x: 4, y: 4 },                // 3 enemy adj, hp 5
+        { form: 'Floecub', owner: 1, x: 4, y: 3 },                // 4 enemy adj, hp 5
+        { form: 'Zapkitt', owner: 1, x: 2, y: 3 },                // 5 enemy adj, hp 4
         { form: 'Coilbug', owner: 0, x: 3, y: 5 },                // 6 ally at distance 2 — untouched
         { form: 'Slithrin', owner: 1, x: 5, y: 5 },               // 7 enemy at distance 2 — untouched
       ],
     });
     s = endTurn(s, 0); // helper resolves the storm aura ({t:'aura', unitId:0}, no target)
-    assertEq(unit(s, 0).hp, 8, 'Tempestdrake never hits itself');
-    assertEq(unit(s, 1).hp, 3, 'adjacent ally takes 1');
-    assertEq(unit(s, 2).hp, 3, 'adjacent ally takes 1');
-    assertEq(unit(s, 3).hp, 3, 'adjacent enemy takes 1');
-    assertEq(unit(s, 4).hp, 3, 'adjacent enemy takes 1');
-    assertEq(unit(s, 5).hp, 2, 'adjacent enemy takes 1');
-    assertEq(unit(s, 6).hp, 4, 'Chebyshev 2 ally untouched');
-    assertEq(unit(s, 7).hp, 4, 'Chebyshev 2 enemy untouched');
+    assertEq(unit(s, 0).hp, 13, 'Tempestdrake never hits itself');
+    assertEq(unit(s, 1).hp, 4, 'adjacent ally takes 1');
+    assertEq(unit(s, 2).hp, 4, 'adjacent ally takes 1');
+    assertEq(unit(s, 3).hp, 4, 'adjacent enemy takes 1');
+    assertEq(unit(s, 4).hp, 4, 'adjacent enemy takes 1');
+    assertEq(unit(s, 5).hp, 3, 'adjacent enemy takes 1');
+    assertEq(unit(s, 6).hp, 5, 'Chebyshev 2 ally untouched');
+    assertEq(unit(s, 7).hp, 5, 'Chebyshev 2 enemy untouched');
     assertEq(s.turn.player, 1, 'turn passed after aura resolution');
   },
 });
 
 tests.push({
-  name: 'localStorm: can KO an ally, and that ally-KO satisfies Cacklet\'s allyKo evolution at the start of its controller\'s next turn (§4, §5)',
+  name: 'localStorm: can KO an ally, and that ally-KO satisfies Cacklet\'s allyKo evolution at the start of its controller\'s next turn; v8 refresh heals ceil((10−5)/2)=3 → 8/10 (PATCH-V8 §4, §5)',
   fn() {
     let s = mkBattle({
       units: [
@@ -80,8 +82,9 @@ tests.push({
     s = endTurn(s, 1); // opponent's turn passes -> Cacklet's controller's turn starts -> evolution (§4 step 1)
     assertEq(s.turn.player, 0);
     assertEq(unit(s, 2).stage, 1, 'Cacklet evolved to Ossiyena');
-    // §4: refresh +2 current HP capped at new max: 4+2=6, Ossiyena max 6 → 6
-    assertEq(unit(s, 2).hp, 6, 'evolution refresh 4+2 capped at Ossiyena max 6');
+    // PATCH-V8 §4: heal ceil(missing/2) vs the NEW max, capped. Cacklet full at 5;
+    // Ossiyena max 10 → missing = 10−5 = 5 → heal ceil(5/2) = 3 → 8/10 (not a full heal).
+    assertEq(unit(s, 2).hp, 8, 'v8 evolution refresh: 5 hp, missing 10−5=5 → +ceil(5/2)=3 → 8');
   },
 });
 
@@ -98,9 +101,9 @@ tests.push({
       ],
     });
     s = endTurn(s, 0);
-    assertEq(unit(s, 1).hp, 5, 'friendly Tavrik untouched by friendly Local Storm');
-    assertEq(unit(s, 3).hp, 5, 'enemy Tavrik untouched by Local Storm');
-    assertEq(unit(s, 2).hp, 3, 'normal adjacent ally still takes 1');
+    assertEq(unit(s, 1).hp, 8, 'friendly Tavrik untouched by friendly Local Storm');
+    assertEq(unit(s, 3).hp, 8, 'enemy Tavrik untouched by Local Storm');
+    assertEq(unit(s, 2).hp, 4, 'normal adjacent ally still takes 1');
   },
 });
 
@@ -133,12 +136,12 @@ tests.push({
     // P0 ends its turn: P0 owns no aura units → no pendingAuras, no storm damage.
     s = GM.applyAction(s, 0, { t: 'endTurn' });
     assertEq(s.turn.player, 1, 'turn passed immediately');
-    assertEq(unit(s, 1).hp, 4, 'enemy drake did not storm on P0\'s endTurn');
+    assertEq(unit(s, 1).hp, 5, 'enemy drake did not storm on P0\'s endTurn');
     // P1 ends its turn: now the storm is pending and resolves.
     let s2 = GM.applyAction(s, 1, { t: 'endTurn' });
     assertEq(s2.turn.pendingAuras, [0], 'storm pending at controller\'s turn end');
     s2 = GM.applyAction(s2, 1, { t: 'aura', unitId: 0 });
-    assertEq(unit(s2, 1).hp, 3, 'adjacent P0 unit takes 1 at P1\'s turn end');
+    assertEq(unit(s2, 1).hp, 4, 'adjacent P0 unit takes 1 at P1\'s turn end');
   },
 });
 
@@ -248,7 +251,7 @@ tests.push({
     });
     s = act(s, 0, 0, { path: [{ x: 3, y: 4 }] });               // a move
     s = endTurn(s, 0, [{ unitId: 1, target: 2 }]);              // Hungry Depths bite (no rng)
-    assertEq(unit(s, 2).hp, 3, 'bite landed');
+    assertEq(unit(s, 2).hp, 4, 'bite landed (Shriket 5 − 1)');
     // P1's turn started: no enemy adjacent to Terradon → zero quake rolls.
     s = act(s, 1, 3, { path: [{ x: 6, y: 5 }] });
     s = endTurn(s, 1);                                          // back to P0 (P1 has no quake aura)
@@ -284,13 +287,13 @@ tests.push({
       turn: 1, // P1 attacking; playerTurns default [1,1]
       units: [
         { form: 'Gravewinter', owner: 0, x: 5, y: 4 },        // 0
-        { form: 'Pupfloe', owner: 0, x: 3, y: 4 },            // 1 victim, hp 4
+        { form: 'Pupfloe', owner: 0, x: 3, y: 4 },            // 1 victim, hp 5
         { form: 'Floecub', owner: 1, x: 4, y: 4 },            // 2 attacker, adjacent to GW
       ],
     });
     // Floecub Basic 2; Ice doubles Grass/Ground/Flying, victim is Ice → no ×2. 2 − 1 (Dread) = 1.
     s = act(s, 1, 2, { attack: { kind: 'basic', target: { x: 3, y: 4 } } });
-    assertEq(unit(s, 1).hp, 3, 'Basic 2 reduced to 1 by Dread Presence');
+    assertEq(unit(s, 1).hp, 4, 'Basic 2 reduced to 1 by Dread Presence (5 − 1)');
   },
 });
 
@@ -301,13 +304,13 @@ tests.push({
       turn: 1,
       units: [
         { form: 'Gravewinter', owner: 0, x: 5, y: 4 },
-        { form: 'Zapkitt', owner: 0, x: 3, y: 4 },            // victim, hp 3
+        { form: 'Zapkitt', owner: 0, x: 3, y: 4 },            // victim, hp 4
         { form: 'Guppling', owner: 1, x: 4, y: 4 },           // attacker, Basic 1, adjacent to GW
       ],
     });
     // Guppling Basic 1; Water doubles Fire/Ground, victim Electric → no ×2. 1 − 1 = 0 → min 1.
     s = act(s, 1, 2, { attack: { kind: 'basic', target: { x: 3, y: 4 } } });
-    assertEq(unit(s, 1).hp, 2, 'damage floored at 1, not reduced to 0');
+    assertEq(unit(s, 1).hp, 3, 'damage floored at 1, not reduced to 0 (4 − 1)');
   },
 });
 
@@ -319,14 +322,15 @@ tests.push({
       units: [
         { form: 'Gravewinter', owner: 0, x: 5, y: 4 },
         // Victim owner 0, pinned "now": pinnedTurn = playerTurns[0] + 1 = 2 (pin applied, not yet cleared)
-        { form: 'Archistrix', owner: 0, x: 3, y: 4, pinnedTurn: 2 }, // Psychic, hp 6
+        { form: 'Archistrix', owner: 0, x: 3, y: 4, pinnedTurn: 2 }, // Psychic, hp 9
         { form: 'Butcherbeak', owner: 1, x: 4, y: 4 },               // Dark, Butcher trait, adjacent to GW
       ],
     });
     // Pipeline: Basic 2 → ×2 super-effective (Dark beats Psychic, single target auto-focus) = 4
-    //           → +2 Butcher (victim Pinned) = 6 → −1 Dread Presence = 5. 6 hp − 5 = 1.
+    //           → +2 Butcher (victim Pinned) = 6 → −1 Dread Presence = 5. 9 hp − 5 = 4.
+    // (Basic applies no Pin, so Butcherbeak's v8 Thorn-root does not trigger here.)
     s = act(s, 1, 2, { attack: { kind: 'basic', target: { x: 3, y: 4 } } });
-    assertEq(unit(s, 1).hp, 1, '2×2+2−1 = 5 damage');
+    assertEq(unit(s, 1).hp, 4, '2×2+2−1 = 5 damage');
   },
 });
 
@@ -357,7 +361,7 @@ tests.push({
     let s = mkBattle({
       units: [
         { form: 'Gravewinter', owner: 0, x: 4, y: 4 },
-        { form: 'Zapkitt', owner: 0, x: 5, y: 6 },   // 1 victim for Tavrik, hp 3
+        { form: 'Zapkitt', owner: 0, x: 5, y: 6 },   // 1 victim for Tavrik, hp 4
         { form: 'Tavrik', owner: 1, x: 4, y: 5 },    // 2 adjacent to GW — immune
         { form: 'Pupfloe', owner: 1, x: 3, y: 5 },   // 3 adjacent to GW — control, gets chilled
       ],
@@ -366,9 +370,9 @@ tests.push({
     assertEq(unit(s, 2).chill, 0, 'Tavrik gains no Chill from Dread Presence');
     assertEq(unit(s, 3).chill, 1, 'ordinary adjacent enemy does gain Chill');
     // Tavrik Basic 2 vs Zapkitt (Electric; Fire doubles Grass/Ice → no ×2; victim is not a Rival → no Close-kill).
-    // No Dread −1 for Tavrik → full 2 damage. 3 − 2 = 1. (With Dread it would have been 1 → hp 2.)
+    // No Dread −1 for Tavrik → full 2 damage. 4 − 2 = 2. (With Dread it would have been 1 → hp 3.)
     s = act(s, 1, 2, { attack: { kind: 'basic', target: { x: 5, y: 6 } } });
-    assertEq(unit(s, 1).hp, 1, 'Tavrik attacks at full damage while adjacent to Gravewinter');
+    assertEq(unit(s, 1).hp, 2, 'Tavrik attacks at full damage while adjacent to Gravewinter');
   },
 });
 
@@ -419,7 +423,7 @@ tests.push({
     let s = mkBattle({
       units: [
         { form: 'Leviadon', owner: 0, x: 3, y: 3, hp: 5 },
-        { form: 'Zapkitt', owner: 1, x: 4, y: 4 },     // adjacent enemy, hp 3
+        { form: 'Zapkitt', owner: 1, x: 4, y: 4 },     // adjacent enemy, hp 4
         { form: 'Pupfloe', owner: 1, x: 7, y: 7 },     // far — not a legal target
       ],
     });
@@ -430,7 +434,7 @@ tests.push({
     assertThrows(() => GM.applyAction(s, 0, { t: 'aura', unitId: 0, target: 2 }),
       'a non-adjacent unit is an illegal bite target');
     s = GM.applyAction(s, 0, { t: 'aura', unitId: 0, target: 1 });
-    assertEq(unit(s, 1).hp, 2, 'bite deals 1');
+    assertEq(unit(s, 1).hp, 3, 'bite deals 1 (4 − 1)');
     assertEq(unit(s, 0).hp, 7, 'enemy bite heals +2 (5→7)');
     assertEq(s.turn.player, 1, 'turn passes once auras empty');
   },
@@ -442,30 +446,30 @@ tests.push({
     let s = mkBattle({
       units: [
         { form: 'Leviadon', owner: 0, x: 3, y: 3, hp: 4 },
-        { form: 'Shriket', owner: 0, x: 2, y: 3 },   // adjacent ally, hp 4
-        { form: 'Zapkitt', owner: 1, x: 4, y: 3 },   // adjacent enemy also available, hp 3
+        { form: 'Shriket', owner: 0, x: 2, y: 3 },   // adjacent ally, hp 5
+        { form: 'Zapkitt', owner: 1, x: 4, y: 3 },   // adjacent enemy also available, hp 4
         { form: 'Pupfloe', owner: 1, x: 7, y: 7 },
       ],
     });
     s = endTurn(s, 0, [{ unitId: 0, target: 1 }]); // choose the ally over the enemy
-    assertEq(unit(s, 1).hp, 3, 'ally bitten for 1');
+    assertEq(unit(s, 1).hp, 4, 'ally bitten for 1');
     assertEq(unit(s, 0).hp, 7, 'ally bite heals +3 (4→7)');
-    assertEq(unit(s, 2).hp, 3, 'enemy untouched');
+    assertEq(unit(s, 2).hp, 4, 'enemy untouched');
   },
 });
 
 tests.push({
-  name: 'hungryDepths: heal is capped at max HP — Leviadon at 7/8 biting an ally ends at 8, not 10 (§5)',
+  name: 'hungryDepths: heal is capped at max HP — Leviadon at 12/13 biting an ally ends at 13, not 15 (§5; v8 max from data.js)',
   fn() {
     let s = mkBattle({
       units: [
-        { form: 'Leviadon', owner: 0, x: 3, y: 3, hp: 7 },  // max 8
+        { form: 'Leviadon', owner: 0, x: 3, y: 3, hp: 12 },  // max 13 (v8)
         { form: 'Shriket', owner: 0, x: 2, y: 3 },
         { form: 'Pupfloe', owner: 1, x: 7, y: 7 },
       ],
     });
     s = endTurn(s, 0, [{ unitId: 0, target: 1 }]);
-    assertEq(unit(s, 0).hp, 8, '7 + 3 capped at max 8');
+    assertEq(unit(s, 0).hp, 13, '12 + 3 capped at max 13');
   },
 });
 
@@ -597,8 +601,8 @@ tests.push({
     assert(J(clone) === J(s), 'JSON round-trip is lossless');
 
     // Identical sequence applied to both. Expected per SPEC:
-    //  - Terradon moves to (3,2), Basic 2 vs Floecub (Ground vs Ice: no ×2) → 4−2 = 2 hp.
-    //  - endTurn: Local Storm hits Shriket (5,6): 1 + 1 Hex (every damage source) = 2 → 2 hp.
+    //  - Terradon moves to (3,2), Basic 2 vs Floecub (Ground vs Ice: no ×2) → 5−2 = 3 hp.
+    //  - endTurn: Local Storm hits Shriket (5,6): 1 + 1 Hex (every damage source) = 2 → 5−2 = 3 hp.
     //  - P1 turn start: Zapkitt burn tick 1 → 2 hp; quake: Floecub (2,3) adjacent to Terradon (3,2),
     //    seed-42 roll 3 = S → (2,2); rng → 1831565855. Zapkitt at (3,4) is NOT adjacent → no roll.
     //  - P1 activates pinned Zapkitt (legal; movement only is blocked), banks it, ends turn.
@@ -618,8 +622,8 @@ tests.push({
     const s2 = run(clone);
     assert(J(s1) === J(s2), 'original and clone replay to identical JSON (determinism)');
     assertEq(unit(s1, 4).pos, { x: 2, y: 2 }, 'quake S moved Floecub');
-    assertEq(unit(s1, 4).hp, 2, 'Basic 2 landed');
-    assertEq(unit(s1, 2).hp, 2, 'storm 1 + Hex 1 = 2 on the hexed ally');
+    assertEq(unit(s1, 4).hp, 3, 'Basic 2 landed (5 − 2)');
+    assertEq(unit(s1, 2).hp, 3, 'storm 1 + Hex 1 = 2 on the hexed ally (5 − 2)');
     assertEq(unit(s1, 3).hp, 2, 'burn ticked 1');
     assertEq(s1.rng, 1831565855, 'exactly one quake roll consumed');
   },
@@ -680,14 +684,14 @@ tests.push({
     });
     b = GM.applyAction(b, 0, { t: 'activate', unitId: 0 });
     b = rt(b, 0, { t: 'attack', kind: 'basic', target: { x: 3, y: 4 } });
-    assertEq(unit(b, 1).hp, 2, 'Basic 2 (Dark vs Ice: no ×2)');
+    assertEq(unit(b, 1).hp, 3, 'Basic 2 (Dark vs Ice: no ×2; 5 − 2)');
 
     // focus — Leviadon Maelstrom (Water burst 3) with TWO Fire enemies hit → focus required (§3).
     let f = mkBattle({
       units: [
         { form: 'Leviadon', owner: 0, x: 3, y: 3 },
-        { form: 'Sootpup', owner: 1, x: 2, y: 3 },     // Fire, hp 4 — focused: 3×2 = 6 → KO
-        { form: 'Cinderling', owner: 1, x: 4, y: 4 },  // Fire, hp 4 — unfocused: 3 → 1 hp
+        { form: 'Sootpup', owner: 1, x: 2, y: 3 },     // Fire, hp 5 — focused: 3×2 = 6 → KO
+        { form: 'Cinderling', owner: 1, x: 4, y: 4 },  // Fire, hp 5 — unfocused: 3 → 2 hp
         { form: 'Pupfloe', owner: 1, x: 7, y: 7 },
       ],
     });
@@ -696,45 +700,45 @@ tests.push({
       'focus is REQUIRED with ≥2 super-effective-eligible hits');
     f = rt(f, 0, { t: 'attack', kind: 'special', focus: 1 });
     assertEq(unit(f, 1).pos, null, 'focused Fire unit took 6 and is KO\'d');
-    assertEq(unit(f, 2).hp, 1, 'other hit unit took plain 3');
+    assertEq(unit(f, 2).hp, 2, 'other hit unit took plain 3');
     assertEq(unit(f, 2).pos, { x: 5, y: 5 }, 'Maelstrom Push 1 directly away (diagonal sign vector, DEV-PIN 14)');
 
     // lungeTo — Pumarok Pounce (Single 2, dmg 3, Lunge).
     let l = mkBattle({
       units: [
         { form: 'Pumarok', owner: 0, x: 3, y: 3 },
-        { form: 'Hootle', owner: 1, x: 3, y: 5 },   // hp 4 → 1 (Ground vs Psychic: no ×2)
+        { form: 'Hootle', owner: 1, x: 3, y: 5 },   // hp 5 → 2 (Ground vs Psychic: no ×2)
         { form: 'Pupfloe', owner: 1, x: 7, y: 7 },
       ],
     });
     l = GM.applyAction(l, 0, { t: 'activate', unitId: 0 });
     l = rt(l, 0, { t: 'attack', kind: 'special', dir: { dx: 0, dy: 1 }, lungeTo: { x: 3, y: 4 } });
-    assertEq(unit(l, 1).hp, 1);
+    assertEq(unit(l, 1).hp, 2);
     assertEq(unit(l, 0).pos, { x: 3, y: 4 }, 'lunged adjacent to the target');
 
     // blinkTo — Velvesper Mindclaw (Single 1, dmg 3, Blink 2).
     let v = mkBattle({
       units: [
         { form: 'Velvesper', owner: 0, x: 3, y: 3 },
-        { form: 'Pupfloe', owner: 1, x: 3, y: 4 },  // hp 4 → 1
+        { form: 'Pupfloe', owner: 1, x: 3, y: 4 },  // hp 5 → 2 (Mindclaw 3, Psychic vs Ice: no ×2)
       ],
     });
     v = GM.applyAction(v, 0, { t: 'activate', unitId: 0 });
     v = rt(v, 0, { t: 'attack', kind: 'special', dir: { dx: 0, dy: 1 }, blinkTo: { x: 5, y: 3 } });
-    assertEq(unit(v, 1).hp, 1);
+    assertEq(unit(v, 1).hp, 2);
     assertEq(unit(v, 0).pos, { x: 5, y: 3 }, 'blinked to an empty square within Chebyshev 2');
 
     // relocateTo — Archistrix Telegrab (range 3, relocate ≤2, Telesmash = min(3, lifetime count incl. this grab)).
     let t = mkBattle({
       units: [
         { form: 'Archistrix', owner: 0, x: 3, y: 3 },
-        { form: 'Pupfloe', owner: 1, x: 3, y: 5 },  // first grab → Telesmash 1: hp 4 → 3
+        { form: 'Pupfloe', owner: 1, x: 3, y: 5 },  // first grab → Telesmash 1: hp 5 → 4
       ],
     });
     t = GM.applyAction(t, 0, { t: 'activate', unitId: 0 });
     t = rt(t, 0, { t: 'attack', kind: 'special', targetUnit: 1, relocateTo: { x: 4, y: 4 } });
     assertEq(unit(t, 1).pos, { x: 4, y: 4 }, 'relocated within 2 of its square');
-    assertEq(unit(t, 1).hp, 3, 'Telesmash 1 on first grab');
+    assertEq(unit(t, 1).hp, 4, 'Telesmash 1 on first grab');
     assertEq(unit(t, 1).telegrabs, 1, 'lifetime counter incremented');
 
     // aura + rematch — storm KOs the last enemy, then either player rematches.

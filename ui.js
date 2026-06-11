@@ -390,7 +390,7 @@ var UI = (function () {
         : 'PeerJS failed to load (offline?) — hotseat still works.');
     return el('div', { class: 'menu' },
       el('h1', { text: 'Grid Monsters' }),
-      el('p', { class: 'tagline', text: '8×8 monster tactics — draft, evolve, eliminate. v7 beta.' }),
+      el('p', { class: 'tagline', text: '8×8 monster tactics — draft, evolve, eliminate. v8 beta (Playtest #8).' }),
       el('section', { class: 'menu-box' },
         el('h2', { text: 'Local game' }),
         el('p', { class: 'muted', text: 'Hotseat — both players share this screen.' }),
